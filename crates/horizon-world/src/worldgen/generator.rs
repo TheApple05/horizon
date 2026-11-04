@@ -3445,7 +3445,7 @@ impl OverworldGenerator {
         dimension: &str,
         with_structures: bool,
         saved_stem: Option<&Value>,
-    ) -> Result<Self, GeneratorError> {
+    ) -> Result<OverworldGenerator, GeneratorError> {
         let stem = if let Some(json) = data.dimensions.get(dimension) {
             serde_json::from_str(json)?
         } else if let Some(stem) = saved_stem {
