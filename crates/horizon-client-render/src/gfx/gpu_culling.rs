@@ -1868,7 +1868,7 @@ mod tests {
                 );
                 let draws = read(device, queue, &gpu.draws.buffer, gpu.draws.bytes);
                 let mut layers = Vec::new();
-                for draw in draws[..expected.len() * 5].chunks_exact(5) {
+                for draw in draws[..expected.len() * 5].as_chunks::<5>().0 {
                     assert_eq!(draw[..3], [6, 1, 0]);
                     layers.push(draw[3] as i32 - 1000);
                 }

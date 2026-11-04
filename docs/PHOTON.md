@@ -6,6 +6,8 @@ Get the Windows renderer, original pack, checksums and validation artifacts from
 
 ## Pinned versions and licenses
 
+The pins, executable checksum and recorded validation below describe the published R2 release at tag `photon-v0.2.0`. The source branch can also contain later integrations with Horizon `main`; rebuilding that newer source does not reproduce the pinned R2 release binary.
+
 - Horizon base: `b33bc70c4fd2e18a5519a13189590cb7b106c556`.
 - Photon by SixthSurge: [`40c887116c70d47c9e7e36cbad3178e04e622746`](https://github.com/sixthsurge/photon/tree/40c887116c70d47c9e7e36cbad3178e04e622746).
 - Windows R2 executable: `horizon-client-photon-r2.exe`, SHA-256 `bc08ca24d50bc678e21896bb465fc7a5b92a6346325a3ca8f8a75d884d7d1f72`.
