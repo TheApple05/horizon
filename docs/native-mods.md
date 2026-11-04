@@ -3524,3 +3524,30 @@ constructors pass no mapper and retain their original source.
 # Camera and collision reads
 
 The `native_camera()` helper returns the most recently extracted world frame's camera, or none before one exists. Its position, interpolated eye height, partial tick, angles, final FOV, near/far planes and dimension accompany column-major view and projection matrices. The view is camera-relative and includes bob and spin; projection uses reversed Z. Earlier callbacks in a frame can see the previous frame. `native_block_collision(pos)` returns block-local `[min_x, min_y, min_z, max_x, max_y, max_z]` boxes with an empty collision context; unloaded blocks and collision errors give no boxes.
+
+
+# Native world presets
+
+A native module can register a `horizon_client_lib::save::custom_presets::CustomPreset`
+once, before reading the world-type catalog. Its static namespaced ID and
+translation key appear after the five built-in choices, in registration order.
+The built-in `WorldPreset::ALL` stays unchanged; `WorldPreset::all()`, the
+create-world button's next/previous actions and ID lookup include registrations.
+The catalog accepts at most 64 entries and rejects duplicate IDs, the
+`minecraft` namespace, malformed identifiers and empty/oversized labels.
+
+The `overworld` callback returns the complete overworld level stem as an NBT
+`Tag`. The regular save writer preserves the chosen seed and generation flags,
+with the ordinary Nether and End stems. A callback failure or malformed stem
+returns an error before writing the settings file. The `recognizes` callback
+receives a saved overworld generator and lets the create/recreate flow recover
+the custom choice. Recognizers must identify their own generators narrowly;
+built-in flat, debug, large-biomes, amplified and fixed-biome recognition keeps
+priority. Both callbacks run outside the catalog lock, so reading metadata from
+a callback is safe.
+
+Registration stores only static metadata and function pointers. World owners,
+generator state and caches belong to the constructed world. Supplying the stem
+does not implement a generator: a native mod must also handle its own world
+constructor and resource integration. This API does not change vanilla choices
+when no custom preset is registered.
