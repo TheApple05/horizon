@@ -313,6 +313,13 @@ impl FeatureDefinition {
         let kind = identifier(&serde_json::from_str::<String>(
             required(&object, "type")?.get(),
         )?)?;
+        if !kind.starts_with("minecraft:")
+            && let Some(blocks) = blocks
+            && let Some(decoder) = &blocks.external_decoder
+            && let Some(result) = decoder.decode(&kind, json, blocks)
+        {
+            return result.map(Self::External);
+        }
         match kind.as_str() {
             "minecraft:no_op" => Ok(Self::NoOp),
             "minecraft:template" => super::structure::features::TemplateFeature::decode(

@@ -3559,7 +3559,17 @@ when no custom preset is registered.
 The object is owned by that world's graph and its clones, never a process-wide
 feature registry. Dropping the last graph releases it. Ordinary JSON decoding
 still rejects unknown feature types; native modules must handle their own bounded
-configuration decoding and bind an external object explicitly.
+configuration decoding and bind an external object explicitly. A native source
+module can call `Pipeline::new_with_extensions` with its biome mapper and a
+world-owned `ExternalFeatureDecoder`. The decoder receives the parsed custom
+type, JSON and block bindings after the normal depth/node-budget check. Minecraft
+types always keep built-in priority. A claimed type can return a decode error;
+an unclaimed type keeps the ordinary unknown-type error.
+
+Decoder bindings stay with the world's decoration, including lazy named-feature
+decodes after construction. These worlds bypass the shared source-JSON decoration
+cache so two worlds cannot alias retained native state. No thread-local owner or
+process-wide feature registry is used for later decoding.
 
 `ExternalFeature::place` receives an object-safe `ExternalFeatureWorld` and the
 candidate origin. It can query states, fluids, tags, heightmaps, world bounds,
