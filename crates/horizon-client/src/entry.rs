@@ -20,9 +20,30 @@ pub fn main_with(mods: crate::mod_api::Mods) {
     let help = game_args
         .clone()
         .any(|a| a == "--help" || a == "-h" || a == "--launch-api");
+    // Personal copies may opt in beside their executable; other installs have no defaults.
+    let local = if help
+        || !crate::auth::local_profile::implicit_session_allowed(&args)
+        || std::env::var_os("HORIZON_SESSION_FILE").is_some()
+        || std::env::var_os("HORIZON_API_DISCOVERY").is_some()
+        || std::env::var_os("HORIZON_PLAYER_NAME").is_some_and(|name| !name.is_empty())
+    {
+        None
+    } else {
+        match crate::auth::local_profile::configured() {
+            Ok(local) => local,
+            Err(error) => {
+                eprintln!("Horizon: {error}");
+                return;
+            }
+        }
+    };
     // --home before the log opens in it.
     if let Some(dir) = game_args.clone().skip_while(|a| *a != "--home").nth(1) {
         logging::set_game_home(std::path::absolute(dir).unwrap_or_else(|_| dir.into()));
+    } else if std::env::var_os("HORIZON_HOME").is_none()
+        && let Some(home) = local.and_then(|profile| profile.home.clone())
+    {
+        logging::set_game_home(home);
     }
     // The dedicated server logs in its own folder (--game-dir's), as vanilla's does; the game in its home.
     let (home, side, thread) = if args.iter().any(|a| a == "--dedicated") {

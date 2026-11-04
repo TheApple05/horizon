@@ -3118,6 +3118,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 self.started,
                 cursor,
                 hide_server_address,
+                items,
             ),
         }
         for b in self.buttons(w, h) {
@@ -3380,7 +3381,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         } else if matches!(
             self.mode,
             Mode::Multiplayer(
-                crate::multiplayer::Screen::Edit { .. } | crate::multiplayer::Screen::Friend { .. }
+                crate::multiplayer::Screen::Edit { .. }
+                    | crate::multiplayer::Screen::Friend { .. }
+                    | crate::multiplayer::Screen::Versions(_)
             )
         ) {
             // A press on a text field takes the focus from the button.
@@ -3907,6 +3910,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     }
     /// Clipboard replacements also invalidate a selection in the filtered list.
     pub fn search_changed(&mut self) {
+        if let Mode::Multiplayer(screen) = &mut self.mode {
+            screen.search_changed();
+        }
         if self.search_focused
             && let Mode::Select { selected, .. } = &mut self.mode
         {
@@ -4268,6 +4274,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// loses the keys (`EditBox.setFocused(false)`).
     pub fn blur_field(&mut self) {
         match &mut self.mode {
+            Mode::Multiplayer(screen) => screen.blur_field(),
             Mode::Select { .. } => self.search_focused = false,
             Mode::Edit { focused, .. } => *focused = false,
             Mode::Create { focus, .. } => *focus = 2,
@@ -4297,6 +4304,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             return crate::multiplayer::Outcome::None;
         };
         let outcome = screen.click(hit, x, y, size, &self.saves);
+        if matches!(hit, Some(61 | 62)) {
+            self.focused_button = None;
+        }
         if hit == Some(41)
             && let crate::multiplayer::Screen::Direct { address } = screen
         {
@@ -4500,6 +4510,12 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             return;
         }
         self.remember_direct_address();
+        if matches!(
+            self.mode,
+            Mode::Multiplayer(crate::multiplayer::Screen::Versions(_))
+        ) {
+            self.focused_button = None;
+        }
         if let Mode::Multiplayer(screen) = &mut self.mode
             && !screen.escape(&self.saves)
         {

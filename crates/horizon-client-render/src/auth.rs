@@ -9,6 +9,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+pub mod local_profile;
+
 /// MinecraftServicesEnvironment.PROD.
 pub const DEFAULT_DISCOVERY: &str = "https://discovery.minecraftservices.com/minecraft/client";
 /// A session file older than this is refused: it can't be replayed later.

@@ -23,7 +23,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
         mpsc::{Receiver, Sender, channel},
     },
     thread::JoinHandle,
@@ -562,7 +562,26 @@ fn connect_tcp(
 /// Whether joining servers of older releases is on (roadmap `older-servers`): off by default while the
 /// adapter is incomplete; `HORIZON_OLDER_SERVERS=1` turns it on.
 pub fn older_servers_enabled() -> bool {
-    std::env::var_os("HORIZON_OLDER_SERVERS").is_some_and(|v| v == "1")
+    match std::env::var_os("HORIZON_OLDER_SERVERS") {
+        Some(value) => value == "1",
+        None => crate::auth::local_profile::configured()
+            .ok()
+            .flatten()
+            .is_some_and(|profile| profile.older_servers),
+    }
+}
+
+// Zero keeps status-ping detection; a protocol number overrides it for this game session.
+static SERVER_VERSION_OVERRIDE: AtomicI32 = AtomicI32::new(0);
+
+pub(crate) fn selected_server_version() -> Option<horizon_protocol::adapter::ServerVersion> {
+    horizon_protocol::adapter::ServerVersion::from_protocol(
+        SERVER_VERSION_OVERRIDE.load(Ordering::Relaxed),
+    )
+}
+
+pub(crate) fn set_server_version(version: Option<horizon_protocol::adapter::ServerVersion>) {
+    SERVER_VERSION_OVERRIDE.store(version.map_or(0, |v| v.protocol()), Ordering::Relaxed);
 }
 
 /// The older release a server speaks, by its status ping, when Horizon can translate it; `None` for the
@@ -571,6 +590,9 @@ fn older_server(address: &str) -> Option<horizon_protocol::adapter::ServerVersio
     use horizon_protocol::adapter::ServerVersion;
     if !older_servers_enabled() {
         return None;
+    }
+    if let Some(version) = selected_server_version() {
+        return (version != ServerVersion::Current).then_some(version);
     }
     let (json, _) = ping(address, Duration::from_secs(5)).ok()?;
     let protocol = i32::try_from(json["version"]["protocol"].as_i64()?).ok()?;

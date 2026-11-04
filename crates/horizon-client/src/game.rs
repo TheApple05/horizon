@@ -542,11 +542,33 @@ impl Options {
     /// The command line, then what it asks of the process: the game folder, the account.
     /// A bad command line is a [`launch_api::UsageError`] (exit code 2, no crash report).
     fn read() -> Result<Option<Self>> {
-        let Some(mut o) = Self::parse(std::env::args().skip(1))
-            .map_err(|e| launch_api::UsageError(e.to_string()))?
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let Some(mut o) =
+            Self::parse(args.iter().cloned()).map_err(|e| launch_api::UsageError(e.to_string()))?
         else {
             return Ok(None);
         };
+        let implicit_personal = !o.session_stdin
+            && o.session_file.is_none()
+            && o.player_name.is_none()
+            && std::env::var_os("HORIZON_API_DISCOVERY").is_none()
+            && horizon_client::auth::local_profile::implicit_session_allowed(&args);
+        let local = if implicit_personal {
+            horizon_client::auth::local_profile::configured()?
+        } else {
+            None
+        };
+        if let Some(profile) = local {
+            if !args.iter().any(|arg| arg == "--resources")
+                && let Some(resources) = &profile.resources
+            {
+                o.resources = resources.clone();
+            }
+            if o.game_dir.is_none() {
+                o.game_dir.clone_from(&profile.game_dir);
+            }
+        }
+        let remembered = local.is_some();
         // The launcher's account: online-mode servers need it. A bad file
         // only leaves the game offline.
         let session = if o.session_stdin {
@@ -555,17 +577,27 @@ impl Options {
                 .map_err(|e| e.to_string())
                 .and_then(|_| horizon_client::auth::AuthSession::parse(&text))
                 .map(Some)
-        } else {
+        } else if o.session_file.is_some() {
             o.session_file
                 .take()
                 .filter(|p| !p.is_empty())
                 .map(|path| horizon_client::auth::AuthSession::load(path.as_ref()))
                 .transpose()
+        } else if remembered {
+            // This opt-in is bound to one UUID, not Prism's currently selected account.
+            // A failure stops this personal launch instead of choosing another identity.
+            Ok(Some(local.expect("remembered profile").session()?))
+        } else {
+            Ok(None)
         };
         match session {
             Ok(Some(session)) => {
                 o.player_name = Some(session.name.clone());
                 horizon_client::auth::set_current(session);
+                if remembered {
+                    log::info!("Signed in with remembered Prism account");
+                    eprintln!("Horizon: signed in with remembered Prism account");
+                }
                 // The chat key pair, ready before the first join.
                 horizon_client::auth::prepare_chat_keys(true);
             }
