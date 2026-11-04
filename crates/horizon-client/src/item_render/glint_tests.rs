@@ -98,6 +98,7 @@ fn state(sprite: &str, foil: FoilType, display: DisplayContext) -> ItemRenderSta
         cit_glint: None,
         hdr_tier: 0,
         hdr_light: 0,
+        shader_item_id: None,
     }
 }
 

@@ -869,6 +869,19 @@ impl Game<'_> {
     }
 }
 
+/// Root must call this immediately after a protocol47 AddEntity, before the first client tick.
+/// Only trusted adapter-owned extras should use this hook; it is not a server packet opcode.
+pub(super) fn remote_legacy47_fireball_acceleration(
+    projectiles: &mut [Projectile],
+    id: i32,
+    wire: [f64; 3],
+) -> bool {
+    projectiles
+        .iter_mut()
+        .find(|p| p.id == id as u32)
+        .is_some_and(|p| p.set_legacy47_acceleration(wire))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1021,17 +1034,4 @@ mod tests {
         remote_projectile_item(&mut list, 14, ItemStack::new("minecraft:diamond", 1));
         assert_eq!(list[2].item, None);
     }
-}
-
-/// Root must call this immediately after a protocol47 AddEntity, before the first client tick.
-/// Only trusted adapter-owned extras should use this hook; it is not a server packet opcode.
-pub(super) fn remote_legacy47_fireball_acceleration(
-    projectiles: &mut [Projectile],
-    id: i32,
-    wire: [f64; 3],
-) -> bool {
-    projectiles
-        .iter_mut()
-        .find(|p| p.id == id as u32)
-        .is_some_and(|p| p.set_legacy47_acceleration(wire))
 }
