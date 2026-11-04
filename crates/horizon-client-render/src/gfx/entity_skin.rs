@@ -160,7 +160,7 @@ impl SkinFrame {
         self.jobs.truncate(jobs);
         self.parts.truncate(parts);
         self.vertices = vertices;
-        self.spans.retain(|s| s.start <= vertices);
+        super::pack_draw::EntitySpan::truncate(&mut self.spans, vertices);
     }
 
     /// Whether the renderer has anything to take.

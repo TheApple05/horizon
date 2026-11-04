@@ -322,6 +322,21 @@ pub(super) fn camera_column(camera: DVec3) -> (i32, i32) {
     )
 }
 
+/// `SectionOcclusionGraph.getRelativeFrom` limits the main view vertically as
+/// well as horizontally. `initializeQueueForFullUpdate` still seeds the nearest
+/// boundary layer when the camera lies outside the level. Section Y is relative
+/// to the level's bottom; shadow and distant-terrain views choose their own policy.
+pub(super) fn section_y_in_view_distance(
+    y: i32,
+    camera_y: i32,
+    radius: i32,
+    sections: i32,
+) -> bool {
+    (i64::from(y) - i64::from(camera_y)).abs() <= i64::from(radius)
+        || (camera_y < 0 && y == 0)
+        || (camera_y >= sections && y == sections - 1)
+}
+
 /// The world AABB (min, max) of a section from its origin and optional tight bounds.
 #[inline]
 fn section_box(min: Vec3, bounds: Option<[Vec3; 2]>) -> (Vec3, Vec3) {
@@ -492,6 +507,72 @@ impl<T> Resident<T> {
 mod tests {
     use super::*;
     use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn main_view_vertical_slice_applies_without_a_cave_graph() {
+        let mut resident = Resident::default();
+        resident.set_min_y(-64);
+        for y in [0, 1, 2, 14, 22, 23] {
+            resident.insert_marked((0, y, 0), (), None, true);
+        }
+        let all = Frustum {
+            planes: [glam::Vec4::W; 6],
+        };
+        // The flat floor at -60 is in relative section 0, fourteen sections
+        // below the eye at 161.62. Exact distance 12 is still drawn.
+        for (eye_y, radius, expected) in [
+            (161.62, 12, &[2, 14, 22, 23][..]),
+            (161.62, 14, &[0, 1, 2, 14, 22, 23][..]),
+            (1000.0, 12, &[23][..]),
+            (-1000.0, 12, &[0][..]),
+            (-63.5, 12, &[0, 1, 2][..]),
+        ] {
+            let camera = DVec3::new(0.5, eye_y, 0.5);
+            let camera_y = super::super::camera_section(camera, -64).1;
+            for marked_only in [false, true] {
+                let mut visible = Vec::new();
+                resident.walk(
+                    camera,
+                    radius,
+                    &all,
+                    |key| section_y_in_view_distance(key.1, camera_y, radius, 24),
+                    |_, _| false,
+                    marked_only,
+                    &mut visible,
+                );
+                let mut ys: Vec<i32> = visible.iter().map(|section| section.key.1).collect();
+                ys.sort_unstable();
+                assert_eq!(
+                    ys, expected,
+                    "eye {eye_y}, radius {radius}, marked {marked_only}"
+                );
+            }
+        }
+        // Shadow views supply their own reach predicate, and LOD cutouts past
+        // the near distance still use `beyond` rather than the near-view slice.
+        let mut shadow = Vec::new();
+        resident.visible(
+            DVec3::new(0.5, 161.62, 0.5),
+            12,
+            &all,
+            |_| true,
+            |_, _| false,
+            &mut shadow,
+        );
+        assert_eq!(shadow.len(), 6);
+        resident.insert((20, 0, 0), ());
+        let mut distant = Vec::new();
+        resident.walk(
+            DVec3::new(0.5, 161.62, 0.5),
+            12,
+            &all,
+            |key| section_y_in_view_distance(key.1, 14, 12, 24),
+            |x, _| x == 20,
+            false,
+            &mut distant,
+        );
+        assert!(distant.iter().any(|section| section.key == (20, 0, 0)));
+    }
 
     #[test]
     fn column_walk_finds_exactly_the_sections_in_view() {

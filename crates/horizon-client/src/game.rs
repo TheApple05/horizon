@@ -2494,6 +2494,8 @@ struct Game<'a> {
     /// Runs of `entity_vertices` by entity, for a shader pack's per-entity draws; recorded only
     /// while `pack_ids` is set (game/shader_packs.rs).
     entity_spans: std::cell::RefCell<Vec<horizon_client::gfx::pack_draw::EntitySpan>>,
+    /// Item submission may also draw GUI previews and hands into other buffers.
+    recording_entity_items: bool,
     /// Which entity this frame's entity vertices belong to (`Frame::entity_motion`).
     entity_motion: std::cell::RefCell<Vec<(u32, u64)>>,
     /// Mob models posed on the GPU (`Frame::skin`, `mobs::skin`): the models stored there,
@@ -10771,6 +10773,7 @@ impl Game<'_> {
         let mut visible_static_block_entity_sections = Vec::new();
         let mut static_block_entity_stats = StaticCacheFrameStats::default();
         self.entity_spans.borrow_mut().clear();
+        self.recording_entity_items = true;
         self.entity_motion.borrow_mut().clear();
         // LevelExtractor.extract: the transient blocks queued since the last frame.
         self.drain_transient_block_queue();
@@ -11335,6 +11338,7 @@ impl Game<'_> {
         laps.lap("eg_cracks");
         self.finish_async_entity_culling();
         laps.lap("eg_culling_finish");
+        self.recording_entity_items = false;
         (
             out,
             static_block_entities,
@@ -13861,8 +13865,16 @@ impl Game<'_> {
     }
     /// FirstPersonHandsAndItemsRenderer: the right arm or the held items of
     /// both hands in view space, converted to camera-relative world space.
-    fn hand_geometry(&mut self, alpha: f64) -> Vec<Vertex> {
+    fn hand_geometry(
+        &mut self,
+        alpha: f64,
+    ) -> (Vec<Vertex>, Vec<horizon_client::gfx::pack_draw::EntitySpan>) {
         let mut out = Vec::new();
+        use horizon_client::gfx::pack_draw::EntitySpan;
+        let mut spans = vec![EntitySpan {
+            stage: horizon_shaders::render_stage("HAND_SOLID"),
+            ..Default::default()
+        }];
         // GameRenderer.renderItemInHand: F1 hides the hand with the HUD.
         if self.spectator()
             || self.ui.hide_gui
@@ -13874,7 +13886,7 @@ impl Game<'_> {
                 .is_none_or(|p| p.health.dead_or_dying())
             || self.screen == Screen::Dead
         {
-            return out;
+            return (out, spans);
         }
         let a = alpha as f32;
         // FirstPersonHandsAndItemsRenderer: the swing goes to the hand that
@@ -13980,6 +13992,9 @@ impl Game<'_> {
                         self.first_person_arm(arm, to_world * pose, packed, &mut out);
                     }
                 }
+                let previous = self
+                    .rendered_item_for_pack(&stack)
+                    .and_then(|id| EntitySpan::item(&mut spans, out.len() as u32, id));
                 match hold {
                     MapHold::TwoHanded => self.two_handed_map_geometry(
                         to_world,
@@ -13996,6 +14011,7 @@ impl Game<'_> {
                         &mut out,
                     ),
                 }
+                EntitySpan::restore(&mut spans, out.len() as u32, previous);
                 continue;
             }
             let mut owner = self.player_owner(Some(&stack));
@@ -14090,6 +14106,9 @@ impl Game<'_> {
                 horizon_client::cit::Hand::Main
             };
             let state = self.resolve_item_in_hand(&stack, context, Some(&owner), seed, cit_hand);
+            let previous = state
+                .shader_item_id
+                .and_then(|id| EntitySpan::item(&mut spans, out.len() as u32, id));
             let light = self.world.light(
                 eye[0].floor() as i32,
                 eye[1].floor() as i32,
@@ -14101,6 +14120,7 @@ impl Game<'_> {
                 block_entity_render::vertex_light(light),
                 &mut out,
             );
+            EntitySpan::restore(&mut spans, out.len() as u32, previous);
         }
         // The hand has its own submit storage, which never uses improved
         // transparency (`LevelRenderer` alone calls `setUseImprovedTransparency`):
@@ -14108,7 +14128,7 @@ impl Game<'_> {
         for vertex in &mut out {
             vertex.layer &= !horizon_client::gfx::OIT_ENTITY;
         }
-        out
+        (out, spans)
     }
     /// The renderer for the window, with the current block sprites, GUI
     /// atlas and world border texture.
@@ -15834,8 +15854,8 @@ impl Game<'_> {
         } else {
             (Vec::new(), None)
         };
-        let mut hand = if title || self.scoping() {
-            Vec::new()
+        let (mut hand, hand_spans) = if title || self.scoping() {
+            (Vec::new(), Vec::new())
         } else {
             self.hand_geometry(camera_alpha)
         };
@@ -15992,6 +16012,7 @@ impl Game<'_> {
             },
             stars: stars.filter(|_| self.settings.horizon.sky || title),
             hand: &hand,
+            hand_spans: &hand_spans,
             hand_fov_degrees: self.hud_fov_degrees(camera_alpha as f32, camera.to_array()),
             screen: &screen,
             pack: pack_inputs,
@@ -18782,6 +18803,7 @@ impl<'a> Game<'a> {
             see_through_vertices: Vec::new(),
             shadow_only_vertices: Default::default(),
             entity_spans: Default::default(),
+            recording_entity_items: false,
             entity_motion: Default::default(),
             skin_models: Default::default(),
             skin_frame: Default::default(),
@@ -20565,6 +20587,7 @@ fn loading_frame(hud: &HudBatch) -> Frame<'_> {
         celestial: &[],
         stars: None,
         hand: &[],
+        hand_spans: &[],
         hand_fov_degrees: 70.0,
         screen: &[],
         pack: Default::default(),

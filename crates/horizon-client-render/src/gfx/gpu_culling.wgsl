@@ -36,7 +36,8 @@ struct Params {
     reach_height: i32,
     reach_sections: i32,
     flags: u32,
-    pad: u32,
+    // Camera section Y relative to the level's bottom, including outside it.
+    cam_y: i32,
 }
 
 // gpu_culling.rs `Record`.
@@ -115,6 +116,15 @@ fn near(x: i32, z: i32) -> bool {
     return gx * gx + gz * gz < r * r;
 }
 
+// SectionOcclusionGraph.getRelativeFrom's vertical bound, with the top/bottom
+// seeds of initializeQueueForFullUpdate when the camera lies outside the level.
+// This applies even with cave culling off and no reached-cell graph.
+fn in_vertical_view(y: i32) -> bool {
+    return abs(y - params.cam_y) <= params.near
+        || (params.cam_y < 0 && y == 0)
+        || (params.cam_y >= i32(params.cells.y) && y == i32(params.cells.y) - 1);
+}
+
 // occlusion.rs `Occlusion::contains` (`Graph::contains`): with no graph, or with
 // cave culling off, every section; in the searched box, whether the search
 // reached it; above a clamped box, over its columns and within the level, the
@@ -186,7 +196,8 @@ fn cull(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     runs[id] = 0u;
     let s = sections[id];
-    if s.key.w < 0 || s.a.y == 0u || !near(s.key.x, s.key.z) || !reached(s.key.xyz) {
+    if s.key.w < 0 || s.a.y == 0u || !near(s.key.x, s.key.z)
+        || !in_vertical_view(s.key.y) || !reached(s.key.xyz) {
         return;
     }
     let page = u32(s.key.w);
