@@ -363,7 +363,7 @@ impl GeneratorData {
         dir: &Path,
         registry: &'static BlockRegistry,
         ov: &WorldgenOverrides,
-    ) -> Result<Arc<Self>, GeneratorError> {
+    ) -> Result<Arc<GeneratorData>, GeneratorError> {
         let mut warnings = Vec::new();
         let flags: Vec<(bool, bool)> =
             serde_json::from_str(&fs::read_to_string(dir.join("block_flags.json"))?)?;
@@ -607,6 +607,13 @@ impl GeneratorData {
         source_json: &str,
         source: &ResolvedBiomeSource,
     ) -> Result<Option<Arc<super::generator_decoration::Decoration>>, GeneratorError> {
+        // source_json describes only the delegate. A world-owned mapper may
+        // add biomes even when the same vanilla delegate was already preloaded.
+        // Keep its decoration world-owned rather than aliasing that shared slot.
+        if matches!(source, ResolvedBiomeSource::Mapped(_)) {
+            return super::generator_decoration::Decoration::new(self, source)
+                .map(|decoration| decoration.map(Arc::new));
+        }
         let slot = {
             let mut cache = self.decorations.lock().unwrap_or_else(|e| e.into_inner());
             let slot = match cache.iter().position(|(k, _)| k == source_json) {
@@ -1042,11 +1049,35 @@ where
     fn new(
         data: Arc<GeneratorData>,
         seed: i64,
+        random: R,
+        generator: &Value,
+        settings_json: &Value,
+        with_structures: bool,
+        level: Option<(i32, i32)>,
+    ) -> Result<Self, GeneratorError> {
+        Self::new_with_biome_mapper(
+            data,
+            seed,
+            random,
+            generator,
+            settings_json,
+            with_structures,
+            level,
+            None,
+        )
+    }
+
+    /// Native source modules may supply a mapper before catalog construction.
+    /// The ordinary constructor retains its unwrapped source and behavior.
+    fn new_with_biome_mapper(
+        data: Arc<GeneratorData>,
+        seed: i64,
         mut random: R,
         generator: &Value,
         settings_json: &Value,
         with_structures: bool,
         level: Option<(i32, i32)>,
+        biome_mapper: Option<Arc<dyn super::biome_source::BiomeMapper>>,
     ) -> Result<Self, GeneratorError> {
         let registry = data.registry;
         let noise = &settings_json["noise"];
@@ -1154,6 +1185,20 @@ where
             .decode(&source_json)?
             .resolve(&data.presets)
             .map_err(|e| resource(format!("biome source: {e}")))?;
+        let source = match biome_mapper {
+            Some(mapper) => {
+                let mapped = source
+                    .with_mapper(mapper)
+                    .map_err(|e| resource(format!("biome mapper: {e}")))?;
+                for name in mapped.possible_biomes() {
+                    if data.biome_id(name).is_none() {
+                        return Err(resource(format!("mapped biome has no definition: {name}")));
+                    }
+                }
+                mapped
+            }
+            None => source,
+        };
         let climate = router.climate_sampler();
         let mut noises = BTreeMap::new();
         for (name, json) in &data.noises {
@@ -1471,7 +1516,7 @@ where
     /// with the state it already has. Check their imported material flags too.
     /// Noise filling already built the WG maps; these writes add no fluid marks.
     fn identity_end_surface(&self, pos: ChunkPos) -> bool {
-        if !matches!(self.source, ResolvedBiomeSource::End(_))
+        if !self.source.is_end()
             // At wrapped block coordinates the ordinary biome-region lookup
             // can fail; retain that lookup and its error outside this range.
             || ![pos.x, pos.z].into_iter().all(|c| {

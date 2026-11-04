@@ -9,7 +9,34 @@ use crate::worldgen::{
     climate::{ClimateSampler, ClimateVolume},
 };
 use horizon_core::density::{DensitySampler, SampleError, SamplerContext};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+
+/// A world-owned transformation of a resolved biome. Implementations must
+/// declare every additional result before the pipeline builds its biome and
+/// decoration catalogs. The parent resolver retains its normal search state.
+pub trait BiomeMapper: std::fmt::Debug + Send + Sync {
+    fn additional_biomes(&self) -> &[String];
+    fn map<'a>(&'a self, parent: &'a str, quart: [i32; 3]) -> Result<&'a str, SampleError>;
+}
+
+#[derive(Debug)]
+pub struct MappedBiomeSource {
+    source: Box<ResolvedBiomeSource>,
+    mapper: Arc<dyn BiomeMapper>,
+    additional: Vec<String>,
+    possible: BTreeSet<String>,
+}
+impl MappedBiomeSource {
+    pub fn source(&self) -> &ResolvedBiomeSource {
+        &self.source
+    }
+    pub fn additional_biomes(&self) -> &[String] {
+        &self.additional
+    }
+}
 
 #[derive(Debug)]
 pub enum BiomeSourceError {
@@ -18,6 +45,7 @@ pub enum BiomeSourceError {
     Checkerboard(CheckerboardError),
     Sample(SampleError),
     MissingPreset,
+    UndeclaredMappedBiome(String),
 }
 impl std::fmt::Display for BiomeSourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -52,6 +80,7 @@ pub enum ResolvedBiomeSource {
     Checkerboard(CheckerboardBiomeSource<String>),
     End(EndBiomeSource<String>),
     MultiNoise(MultiNoiseBiomeSource),
+    Mapped(MappedBiomeSource),
 }
 impl BiomeSourceDefinition {
     /// Resolve a decoded definition using immutable, authenticated quantized
@@ -86,6 +115,39 @@ impl BiomeSourceDefinition {
     }
 }
 impl ResolvedBiomeSource {
+    /// Attach before building a pipeline's catalogs, never after filling chunks.
+    pub fn with_mapper(self, mapper: Arc<dyn BiomeMapper>) -> Result<Self, BiomeSourceError> {
+        let additional = mapper
+            .additional_biomes()
+            .iter()
+            .map(|name| {
+                let canonical = super::super::density::identifier(name)?;
+                if &canonical != name {
+                    return Err(DecodeError::Field("mapped biome must be namespaced"));
+                }
+                Ok(canonical)
+            })
+            .collect::<Result<Vec<_>, DecodeError>>()?;
+        let mut possible: BTreeSet<String> = self
+            .possible_biomes()
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        possible.extend(additional.iter().cloned());
+        Ok(Self::Mapped(MappedBiomeSource {
+            source: Box::new(self),
+            mapper,
+            additional,
+            possible,
+        }))
+    }
+    pub(crate) fn is_end(&self) -> bool {
+        match self {
+            Self::End(_) => true,
+            Self::Mapped(source) => source.source.is_end(),
+            _ => false,
+        }
+    }
     pub fn possible_biomes(&self) -> BTreeSet<&str> {
         match self {
             Self::Fixed(source) => [source.biome.as_str()].into(),
@@ -104,6 +166,7 @@ impl ResolvedBiomeSource {
                 .iter()
                 .map(|(_, name)| name.as_str())
                 .collect(),
+            Self::Mapped(source) => source.possible.iter().map(String::as_str).collect(),
         }
     }
     /// Keep one resolver per worker to retain native previous-leaf tie behavior.
@@ -118,6 +181,11 @@ impl ResolvedBiomeSource {
             Self::Checkerboard(source) => BiomeSourceResolver::Checkerboard(source),
             Self::End(source) => BiomeSourceResolver::End(source, erosion),
             Self::MultiNoise(source) => BiomeSourceResolver::MultiNoise(source.resolver(climate)),
+            Self::Mapped(source) => BiomeSourceResolver::Mapped {
+                source: Box::new(source.source.resolver(climate, erosion)),
+                mapper: source.mapper.as_ref(),
+                possible: &source.possible,
+            },
         }
     }
 }
@@ -127,6 +195,11 @@ pub enum BiomeSourceResolver<'a> {
     Checkerboard(&'a CheckerboardBiomeSource<String>),
     End(&'a EndBiomeSource<String>, &'a dyn DensitySampler),
     MultiNoise(BiomeResolver<'a>),
+    Mapped {
+        source: Box<BiomeSourceResolver<'a>>,
+        mapper: &'a dyn BiomeMapper,
+        possible: &'a BTreeSet<String>,
+    },
 }
 impl<'a> BiomeSourceResolver<'a> {
     pub fn sample(
@@ -139,6 +212,11 @@ impl<'a> BiomeSourceResolver<'a> {
             Self::Checkerboard(source) => source.noise_biome(quart)?.as_str(),
             Self::End(source, erosion) => source.noise_biome(quart, *erosion, context)?.as_str(),
             Self::MultiNoise(source) => source.sample(context, quart)?,
+            Self::Mapped {
+                source,
+                mapper,
+                possible,
+            } => map_biome(*mapper, possible, source.sample(context, quart)?, quart)?,
         })
     }
     /// Native fixed/checkerboard/End sources do not pre-sample a climate volume.
@@ -151,6 +229,7 @@ impl<'a> BiomeSourceResolver<'a> {
     ) -> Result<Option<ClimateVolume>, BiomeSourceError> {
         match self {
             Self::MultiNoise(source) => Ok(Some(source.prepare_volume(context, minimum, extents)?)),
+            Self::Mapped { source, .. } => source.prepare_volume(context, minimum, extents),
             _ => Ok(None),
         }
     }
@@ -160,6 +239,19 @@ impl<'a> BiomeSourceResolver<'a> {
         volume: Option<&ClimateVolume>,
         quart: [i32; 3],
     ) -> Result<&'a str, BiomeSourceError> {
+        if let Self::Mapped {
+            source,
+            mapper,
+            possible,
+        } = self
+        {
+            return map_biome(
+                *mapper,
+                possible,
+                source.sample_prepared(context, volume, quart)?,
+                quart,
+            );
+        }
         if let Self::MultiNoise(source) = self {
             if let Some(volume) = volume {
                 return Ok(source.sample_prepared(volume, quart)?);
@@ -167,4 +259,17 @@ impl<'a> BiomeSourceResolver<'a> {
         }
         self.sample(context, quart)
     }
+}
+
+fn map_biome<'a>(
+    mapper: &'a dyn BiomeMapper,
+    possible: &BTreeSet<String>,
+    parent: &'a str,
+    quart: [i32; 3],
+) -> Result<&'a str, BiomeSourceError> {
+    let mapped = mapper.map(parent, quart)?;
+    if !possible.contains(mapped) {
+        return Err(BiomeSourceError::UndeclaredMappedBiome(mapped.to_owned()));
+    }
+    Ok(mapped)
 }
