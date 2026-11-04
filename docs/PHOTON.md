@@ -27,6 +27,8 @@ cargo build --profile fast -p horizon-client
 
 The second command produces `target\fast\horizon-client.exe`. R2 used the optimized `fast` profile (`lto=false`, `codegen-units=16`). The release launcher selects the separately installed original Photon pack and reuses locally prepared 26.3 resources.
 
+The optional Windows installer expects an existing direct-launch setup with both `.local/direct-launch/Start-Horizon.ps1` and `Start-Horizon.cmd` under the Horizon installation. Those helpers preserve that setup's account handling. The release bundle README also gives a manual prebuilt launch path using your prepared resources and a fresh `HORIZON_HOME`; the helpers are not required for that local single-player path.
+
 The Photon launcher sets `HORIZON_SHADER_IRIS_1_11_7=1`. This enables only the wetness smoothing behavior measured from Iris 1.11.7: the last valid `wetnessHalflife` or lowercase `drynessHalflife` assignment selects the rising half-life, while drying retains its default. Original Photon consequently wets with about a 7-second half-life and dries with about a 20-second half-life. Ordinary launches keep the documented independent settings. This is a bounded observed compatibility profile, not complete Iris version emulation.
 
 ## Recorded validation
