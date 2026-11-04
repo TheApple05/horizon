@@ -16,6 +16,8 @@ const UNIFORM: u64 = 2 * 64;
 /// What `gbuffers_hand` reads: the entity inputs, and the hand's projection from set 1.
 pub fn inputs() -> horizon_shaders::GbuffersInputs {
     let mut inputs = super::pack_entities::inputs();
+    // Hand programs declare currentRenderedItemId even when the source omits it.
+    inputs.item_id_declared = true;
     inputs.declarations.push_str(
         "layout(set = 1, binding = 1) uniform HzHand { mat4 hz_hand_projection; mat4 hz_hand_projection_inverse; };\n",
     );
@@ -264,6 +266,20 @@ mod tests {
         );
         assert_eq!(item_ranges(8, &[]), [(0..8, None)]);
         assert!(item_ranges(0, &spans).is_empty());
+    }
+
+    #[test]
+    fn empty_item_draw_does_not_leak_its_id_into_the_next_hand() {
+        use super::super::pack_draw::EntitySpan;
+        let mut spans = vec![EntitySpan::default()];
+        let previous = EntitySpan::item(&mut spans, 4, 11);
+        EntitySpan::restore(&mut spans, 4, previous);
+        let previous = EntitySpan::item(&mut spans, 4, 22);
+        EntitySpan::restore(&mut spans, 8, previous);
+        assert_eq!(
+            item_ranges(12, &spans),
+            [(0..4, None), (4..8, Some(22)), (8..12, None)]
+        );
     }
 
     /// The hand's window depth lies within `MC_HAND_DEPTH` of the middle (packs tell the hand

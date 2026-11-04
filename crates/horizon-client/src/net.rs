@@ -23,7 +23,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
         mpsc::{Receiver, Sender, channel},
     },
     thread::JoinHandle,
@@ -57,6 +57,12 @@ pub enum Event {
         name: String,
     },
     Packet(Box<play::Clientbound>),
+    /// One indivisible game-thread operation: spawn, then install old fixed-vector physics.
+    /// Produced only from ConnReader's trusted adapter state, never from server custom payloads.
+    Legacy47Projectile {
+        packet: Box<play::AddEntity>,
+        acceleration: [f64; 3],
+    },
     /// A packet that failed to decode (skipped, like vanilla's skippable packets).
     DecodeError(String),
     /// The server sent us back to configuration (`ClientboundStartConfigurationPacket`):
@@ -116,6 +122,23 @@ pub struct Session {
     far: Arc<crate::lod_net::Inbox>,
 }
 impl Session {
+    /// The negotiated wire release, once the connection has been established.
+    pub fn server_version(&self) -> horizon_protocol::adapter::ServerVersion {
+        self.writer.lock().unwrap().as_ref().map_or(
+            horizon_protocol::adapter::ServerVersion::Current,
+            ConnWriter::server_version,
+        )
+    }
+
+    /// Secure-chat enforcement synchronized later than login on older servers.
+    pub fn legacy_secure_chat_enforcement(&self) -> Option<bool> {
+        self.writer
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(ConnWriter::legacy_secure_chat_enforcement)
+    }
+
     /// Start connecting in the background, as `auth`'s account when there is one.
     pub fn connect(
         address: &str,
@@ -288,6 +311,31 @@ impl Session {
             w.shutdown();
         }
     }
+    /// Trusted local acceptance for legacy47 edits; no reader packets are drained here.
+    pub fn send_checked(
+        &self,
+        packet: play::Serverbound,
+    ) -> horizon_protocol::adapter::SendDisposition {
+        use horizon_protocol::adapter::SendDisposition as D;
+        if self.debug {
+            eprintln!("[net] -> {packet:?}");
+        }
+        let mut writer = self.writer.lock().unwrap();
+        if self.configuring.load(Ordering::Relaxed) {
+            return D::Consumed;
+        }
+        let Some(writer) = writer.as_mut() else {
+            return D::Consumed;
+        };
+        match writer.send_checked(&packet.encode()) {
+            Ok(outcome) => outcome,
+            Err(_) => {
+                writer.shutdown();
+                D::Consumed
+            }
+        }
+    }
+
     /// Far terrain the server samples, as it offered (`Event::FarTerrain`):
     /// biomes named by this client's indices, block states below `states`.
     pub fn far_terrain(
@@ -456,7 +504,7 @@ fn tr(lang: &Language, key: &str) -> String {
 }
 
 /// Why a connection ended: the shown text and, when the reason was a
-/// translatable component or a known Horizon error, its translation key —
+/// translatable component or a known Horizon error, its translation key â€”
 /// the auto-reconnect classifies by key (`reconnect::allowed`), the
 /// English keyword scan of the text is the fallback for plain reasons.
 #[derive(Clone)]
@@ -559,10 +607,29 @@ fn connect_tcp(
     Ok((c, host, port))
 }
 
-/// Whether joining servers of older releases is on (roadmap `older-servers`): off by default while the
-/// adapter is incomplete; `HORIZON_OLDER_SERVERS=1` turns it on.
+/// Installing ViaHorizon enables its experimental older-server adapters.
+/// `HORIZON_OLDER_SERVERS=0` explicitly disables them for this process.
 pub fn older_servers_enabled() -> bool {
-    std::env::var_os("HORIZON_OLDER_SERVERS").is_some_and(|v| v == "1")
+    match std::env::var_os("HORIZON_OLDER_SERVERS") {
+        Some(value) => value == "1",
+        None => crate::auth::local_profile::configured()
+            .ok()
+            .flatten()
+            .is_some_and(|profile| profile.older_servers),
+    }
+}
+
+// Zero keeps status-ping detection; a protocol number overrides it for this game session.
+static SERVER_VERSION_OVERRIDE: AtomicI32 = AtomicI32::new(0);
+
+pub(crate) fn selected_server_version() -> Option<horizon_protocol::adapter::ServerVersion> {
+    horizon_protocol::adapter::ServerVersion::from_protocol(
+        SERVER_VERSION_OVERRIDE.load(Ordering::Relaxed),
+    )
+}
+
+pub(crate) fn set_server_version(version: Option<horizon_protocol::adapter::ServerVersion>) {
+    SERVER_VERSION_OVERRIDE.store(version.map_or(0, |v| v.protocol()), Ordering::Relaxed);
 }
 
 /// The older release a server speaks, by its status ping, when Horizon can translate it; `None` for the
@@ -571,6 +638,9 @@ fn older_server(address: &str) -> Option<horizon_protocol::adapter::ServerVersio
     use horizon_protocol::adapter::ServerVersion;
     if !older_servers_enabled() {
         return None;
+    }
+    if let Some(version) = selected_server_version() {
+        return (version != ServerVersion::Current).then_some(version);
     }
     let (json, _) = ping(address, Duration::from_secs(5)).ok()?;
     let protocol = i32::try_from(json["version"]["protocol"].as_i64()?).ok()?;
@@ -888,6 +958,18 @@ fn receive_play(
             play::Clientbound::CustomPayload(p) if p.channel == crate::lod_net::CHANNEL => {
                 far.deliver(p.data);
             }
+            play::Clientbound::AddEntity(packet) => {
+                let event = match reader.take_legacy47_projectile_acceleration(packet.id) {
+                    Some(acceleration) => Event::Legacy47Projectile {
+                        packet: Box::new(packet),
+                        acceleration,
+                    },
+                    None => Event::Packet(Box::new(play::Clientbound::AddEntity(packet))),
+                };
+                if send.send(event).is_err() {
+                    return Ok(Reason::plain("Disconnected"));
+                }
+            }
             other => {
                 if send.send(Event::Packet(Box::new(other))).is_err() {
                     return Ok(Reason::plain("Disconnected"));
@@ -1099,7 +1181,7 @@ pub fn load_language(resources: &std::path::Path) -> Language {
         return lang.map().clone();
     }
     // No language screen ran (a dedicated server's log): en_us, with
-    // Horizon's own strings included — the net thread resolves keys with
+    // Horizon's own strings included â€” the net thread resolves keys with
     // this map (`Reason::keyed`).
     horizon_client_core::lang::Language::load(&[&resources.to_path_buf()], "en_us")
         .map()
@@ -1159,7 +1241,7 @@ fn legacy_int(s: &str, default: i32) -> i32 {
 }
 
 /// `LegacyServerPinger.channelRead0` on the string after the 0xFF byte: split
-/// on NUL (at most 6 parts) and the first part must be `§1`.
+/// on NUL (at most 6 parts) and the first part must be `Â§1`.
 fn parse_legacy_status(text: &str) -> Option<LegacyStatus> {
     let parts: Vec<&str> = text.splitn(6, '\0').collect();
     if parts.first() != Some(&"\u{a7}1") || parts.len() < 6 {
@@ -1256,6 +1338,96 @@ mod tests {
 
     #[test]
     fn direct_login_preserves_hostname_and_negotiates_brand() {
+        // The installable mod auto-detects the server with a separate status connection. Serve it
+        // alongside the already accepted login connection rather than making login wait on an
+        // unanswered ping. The same fixture also terminates promptly with detection disabled.
+        struct StatusResponder {
+            stop: Arc<AtomicBool>,
+            thread: Option<std::thread::JoinHandle<usize>>,
+        }
+        impl StatusResponder {
+            fn start(listener: std::net::TcpListener, port: u16) -> Self {
+                listener.set_nonblocking(true).unwrap();
+                let stop = Arc::new(AtomicBool::new(false));
+                let stopped = stop.clone();
+                let thread = std::thread::spawn(move || {
+                    use horizon_protocol::packets::status;
+                    let mut served = 0;
+                    while !stopped.load(Ordering::Acquire) {
+                        let stream = match listener.accept() {
+                            Ok((stream, _)) => stream,
+                            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                                std::thread::sleep(Duration::from_millis(5));
+                                continue;
+                            }
+                            Err(error) => panic!("status fixture accept failed: {error}"),
+                        };
+                        stream.set_nonblocking(false).unwrap();
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(2)))
+                            .unwrap();
+                        stream
+                            .set_write_timeout(Some(Duration::from_secs(2)))
+                            .unwrap();
+                        let mut status_connection = Connection::from_stream(stream).unwrap();
+                        let (id, body) = status_connection.recv().unwrap();
+                        let handshake::Serverbound::Intention(packet) =
+                            handshake::Serverbound::decode(id, &body).unwrap()
+                        else {
+                            panic!("expected status handshake")
+                        };
+                        assert_eq!((packet.host.as_str(), packet.port), ("localhost", port));
+                        assert_eq!(packet.intent, handshake::STATUS);
+                        assert_eq!(packet.protocol, PROTOCOL_VERSION);
+                        let (id, body) = status_connection.recv().unwrap();
+                        assert!(matches!(
+                            status::Serverbound::decode(id, &body).unwrap(),
+                            status::Serverbound::StatusRequest(_)
+                        ));
+                        status_connection.send(&status::Clientbound::StatusResponse(status::StatusResponse {
+                            json: serde_json::json!({
+                                "version": {"name": "synthetic", "protocol": PROTOCOL_VERSION},
+                                "players": {"max": 0, "online": 0},
+                                "description": {"text": "Synthetic status fixture"},
+                            }).to_string(),
+                        }).encode()).unwrap();
+                        let (id, body) = status_connection.recv().unwrap();
+                        let status::Serverbound::PingRequest(ping) =
+                            status::Serverbound::decode(id, &body).unwrap()
+                        else {
+                            panic!("expected status ping")
+                        };
+                        status_connection
+                            .send(&status::Clientbound::PongResponse(ping).encode())
+                            .unwrap();
+                        served += 1;
+                    }
+                    served
+                });
+                Self {
+                    stop,
+                    thread: Some(thread),
+                }
+            }
+
+            fn finish(mut self) -> usize {
+                self.stop.store(true, Ordering::Release);
+                self.thread
+                    .take()
+                    .unwrap()
+                    .join()
+                    .expect("status fixture failed")
+            }
+        }
+        impl Drop for StatusResponder {
+            fn drop(&mut self) {
+                self.stop.store(true, Ordering::Release);
+                if let Some(thread) = self.thread.take() {
+                    // Join on assertion failures too, without causing a second panic on unwind.
+                    let _ = thread.join();
+                }
+            }
+        }
         for server_brand in [
             b"\x07vanilla".as_slice(),
             b"\x07horizon",
@@ -1264,6 +1436,7 @@ mod tests {
         ] {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
             let port = listener.local_addr().unwrap().port();
+            let expects_status = older_servers_enabled() && selected_server_version().is_none();
             let session = Session::connect(
                 &format!("localhost:{port}"),
                 "Probe",
@@ -1273,6 +1446,7 @@ mod tests {
                 PathBuf::new(),
             );
             let (stream, _) = listener.accept().unwrap();
+            let status = StatusResponder::start(listener.try_clone().unwrap(), port);
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
@@ -1351,6 +1525,7 @@ mod tests {
             );
             drop(server);
             drop(session);
+            assert_eq!(status.finish(), usize::from(expects_status));
         }
     }
 

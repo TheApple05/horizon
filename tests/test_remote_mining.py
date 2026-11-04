@@ -5,6 +5,7 @@ The first_person parity harness separately checks consecutive instant breaks
 against the pinned client; this fixture catches drift in the multiplayer path.
 """
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -72,6 +73,7 @@ struct Game {
     remote: Option<Remote>, mining: Option<Mining>, creative: bool,
     world: World, res: Resources, player: Option<Player>, audio: Audio,
     hit: Hit, sequence: i32, packets: Vec<play::PlayerAction>, restricted: bool,
+    legacy47: bool, prediction_allowed: bool,
 }
 impl Game {
     fn main_hand_key(&self) -> String { String::new() }
@@ -85,7 +87,7 @@ impl Game {
             player: Some(Player { ground: Ground { on_ground: true } }),
             audio: Audio { played: Vec::new() },
             hit: Hit { pos: [0, 64, 0], face: 1 }, sequence: 0, packets: vec![],
-            restricted: false,
+            restricted: false, legacy47: false, prediction_allowed: true,
         }
     }
     fn pick(&self) -> Option<Hit> { Some(self.hit) }
@@ -99,6 +101,13 @@ impl Game {
     fn next_sequence(&mut self) -> i32 { self.sequence += 1; self.sequence }
     fn predict_break(&mut self, pos: [i32; 3], _: u32, _: i32) { self.world.broken.push(pos); }
     fn send(&mut self, S::PlayerAction(packet): S) { self.packets.push(packet); }
+    fn is_legacy47(&self) -> bool { self.legacy47 }
+    // The transport accepts or rejects prediction before legacy local world edits.
+    fn send_for_prediction(&mut self, packet: S) -> bool {
+        if !self.prediction_allowed { return false; }
+        self.send(packet);
+        true
+    }
     fn crack_particle(&mut self, _: [i32; 3], _: u8, _: u32) {}
     // RedStoneOreBlock.attack's dust (sculk.rs): no particles in this fixture.
     fn redstone_ore_particles(&mut self, _: [i32; 3]) {}
@@ -190,6 +199,34 @@ fn main() {
     assert!(!stopped.is_destroying);
     assert!(game.mining.is_none());
     assert!(game.world.broken.is_empty());
+    // Legacy transports can reject an action: no predicted block removal may
+    // happen before that transport has accepted the creative/instant START.
+    for creative in [false, true] {
+        let mut game = Game::new(0.0, 1.0, creative);
+        game.legacy47 = true;
+        game.prediction_allowed = false;
+        game.remote_mining(true);
+        assert!(game.world.broken.is_empty());
+        assert!(game.packets.is_empty());
+        game.prediction_allowed = true;
+        game.remote_mining(true);
+        assert_eq!(game.world.broken, [[0, 64, 0]]);
+        assert_eq!(game.packets.len(), 1);
+        assert_eq!(game.packets[0].action, 0);
+    }
+    // A refused legacy STOP also leaves the gradual break unpredicted.
+    let mut game = Game::new(1.0, 15.0, false);
+    game.legacy47 = true;
+    game.remote_mining(true);
+    game.remote_mining(false);
+    game.prediction_allowed = false;
+    game.remote_mining(false);
+    assert!(game.world.broken.is_empty());
+    assert_eq!(game.packets.iter().map(|p| p.action).collect::<Vec<_>>(), [0]);
+    game.prediction_allowed = true;
+    game.remote_mining(false);
+    assert_eq!(game.world.broken, [[0, 64, 0]]);
+    assert_eq!(game.packets.iter().map(|p| p.action).collect::<Vec<_>>(), [0, 3]);
     // An adventure player without can_break (#3027): startDestroyBlock
     // refuses before predicting, so nothing breaks, cracks or is sent.
     for (hardness, speed) in [(0.0, 1.0), (1.0, 15.0)] {
@@ -210,9 +247,11 @@ fn main() {
         with tempfile.TemporaryDirectory(prefix="remote-mining-") as directory:
             path = Path(directory)
             (path / "main.rs").write_text(fixture)
-            subprocess.run(["rustc", "--edition=2024", str(path / "main.rs"), "-o", str(path / "probe")],
-                           check=True, capture_output=True, text=True)
-            result = subprocess.run([str(path / "probe")], capture_output=True, text=True)
+            binary = path / ("probe.exe" if os.name == "nt" else "probe")
+            compiled = subprocess.run(["rustc", "--edition=2024", str(path / "main.rs"), "-o", str(binary)],
+                                      capture_output=True, text=True)
+            self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
+            result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 

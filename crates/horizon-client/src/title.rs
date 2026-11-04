@@ -1006,7 +1006,10 @@ impl Title {
             return;
         };
         if !crate::datapack::copy_pack(&path, &dir) {
-            log::warn!("Horizon: {} is not a data pack", path.display());
+            log::warn!(
+                "Horizon: {} is not a data pack that could be copied",
+                path.display()
+            );
         }
     }
     /// The world's data pack selection, for the game to reoffer.
@@ -3118,6 +3121,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 self.started,
                 cursor,
                 hide_server_address,
+                items,
             ),
         }
         for b in self.buttons(w, h) {
@@ -3380,7 +3384,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         } else if matches!(
             self.mode,
             Mode::Multiplayer(
-                crate::multiplayer::Screen::Edit { .. } | crate::multiplayer::Screen::Friend { .. }
+                crate::multiplayer::Screen::Edit { .. }
+                    | crate::multiplayer::Screen::Friend { .. }
+                    | crate::multiplayer::Screen::Versions(_)
             )
         ) {
             // A press on a text field takes the focus from the button.
@@ -3388,16 +3394,27 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         }
         if matches!(self.mode, Mode::CreateBuffet { .. }) {
             self.buffet_click(x, y, (w, h), hit);
+            self.drop_button_focus_for_field(hit);
             return (Action::None, hit.is_some());
         }
         if matches!(self.mode, Mode::CreateFlat { .. }) {
             self.flat_click(x, y, (w, h), hit);
+            self.drop_button_focus_for_field(hit);
             return (Action::None, hit.is_some());
         }
         let action = self.click_action(x, y, (w, h), hit);
+        self.drop_button_focus_for_field(hit);
         // World list selection is silent; launching its selected entry sounds.
         let sound = hit.is_some() || matches!(action, Action::Play { .. });
         (action, sound)
+    }
+    /// A click that misses every button and leaves an edit box focused moves the focus
+    /// to that box (`Screen.setFocused`): a focused button must not keep reacting to
+    /// Space, which the box now types.
+    fn drop_button_focus_for_field(&mut self, hit: Option<u8>) {
+        if hit.is_none() && self.has_caret_field() {
+            self.focused_button = None;
+        }
     }
     fn click_action(&mut self, x: f32, y: f32, (w, h): (f32, f32), hit: Option<u8>) -> Action {
         match (&mut self.mode, hit) {
@@ -3907,6 +3924,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     }
     /// Clipboard replacements also invalidate a selection in the filtered list.
     pub fn search_changed(&mut self) {
+        if let Mode::Multiplayer(screen) = &mut self.mode {
+            screen.search_changed();
+        }
         if self.search_focused
             && let Mode::Select { selected, .. } = &mut self.mode
         {
@@ -4268,6 +4288,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// loses the keys (`EditBox.setFocused(false)`).
     pub fn blur_field(&mut self) {
         match &mut self.mode {
+            Mode::Multiplayer(screen) => screen.blur_field(),
             Mode::Select { .. } => self.search_focused = false,
             Mode::Edit { focused, .. } => *focused = false,
             Mode::Create { focus, .. } => *focus = 2,
@@ -4297,6 +4318,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             return crate::multiplayer::Outcome::None;
         };
         let outcome = screen.click(hit, x, y, size, &self.saves);
+        if matches!(hit, Some(61 | 62)) {
+            self.focused_button = None;
+        }
         if hit == Some(41)
             && let crate::multiplayer::Screen::Direct { address } = screen
         {
@@ -4500,6 +4524,12 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             return;
         }
         self.remember_direct_address();
+        if matches!(
+            self.mode,
+            Mode::Multiplayer(crate::multiplayer::Screen::Versions(_))
+        ) {
+            self.focused_button = None;
+        }
         if let Mode::Multiplayer(screen) = &mut self.mode
             && !screen.escape(&self.saves)
         {
@@ -4642,6 +4672,35 @@ mod classic_tests {
             title.focused_button.is_some(),
             "the next Tab reaches the buttons"
         );
+    }
+
+    /// Vanilla: clicking an EditBox focuses it, so a button focused earlier stops
+    /// reacting to Space (which the box types).
+    #[test]
+    fn clicking_a_text_field_drops_the_focused_button() {
+        let mut title = Title::new(
+            PathBuf::new(),
+            Path::new("/nonexistent/horizon-test-resources"),
+        );
+        title.mode = Mode::Create {
+            name: String::new(),
+            seed: String::new(),
+            creative: false,
+            focus: 0,
+            options: WorldOptions::default(),
+        };
+        title.focused_button = Some(1);
+        // A click inside the name field hits no button and focuses the field.
+        let (_, [fx, fy, fw, fh]) = create_world::field_rect(854.0, 480.0, 0).unwrap();
+        let (action, _) = title.click(fx + fw / 2.0, fy + fh / 2.0, (854.0, 480.0));
+        assert!(matches!(action, Action::None));
+        assert!(title.focused_button.is_none());
+        assert!(title.has_caret_field());
+        title.type_text(" ");
+        match &title.mode {
+            Mode::Create { name, .. } => assert_eq!(name, " "),
+            _ => unreachable!(),
+        }
     }
 
     #[test]
