@@ -3551,3 +3551,33 @@ generator state and caches belong to the constructed world. Supplying the stem
 does not implement a generator: a native mod must also handle its own world
 constructor and resource integration. This API does not change vanilla choices
 when no custom preset is registered.
+
+# Seed-derived native world features
+
+`horizon_world::worldgen::feature_graph::FeatureDefinition::External` retains an
+`Arc<dyn external_feature::ExternalFeature>` in the executable feature graph.
+The object is owned by that world's graph and its clones, never a process-wide
+feature registry. Dropping the last graph releases it. Ordinary JSON decoding
+still rejects unknown feature types; native modules must handle their own bounded
+configuration decoding and bind an external object explicitly.
+
+`ExternalFeature::place` receives an object-safe `ExternalFeatureWorld` and the
+candidate origin. It can query states, fluids, tags, heightmaps, world bounds,
+sea level, world seed and exact noise-biome quarts. Quart coordinates are already
+in biome units; `noise_biome_is` compares a canonical registry name without the
+fuzzy, seed-obfuscated block-biome lookup. Unavailable chunks/biomes and query
+errors propagate through the feature execution error, rather than becoming
+successful no-ops.
+
+Writes use `set_chunk_block`, retaining generation-chunk heightmap updates and
+avoiding live neighbor/block-entity notifications. As with vanilla features,
+an error after an earlier write does not roll back that write. Native algorithms
+must bound their own loops and writes to the valid generation region.
+
+This interface exposes no decoration random stream. It supports algorithms with
+their own seed-derived noise or random state; an algorithm that consumes vanilla
+feature randomness needs a separate interface. Nesting an external feature in
+ordinary placed-feature composition retains the host's modifier order and
+budgets. With no external object bound, vanilla feature decoding and execution
+keep their existing paths. This API supplies no mod biome definitions or feature
+algorithms itself.

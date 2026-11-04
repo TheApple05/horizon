@@ -1507,6 +1507,16 @@ impl PlacementContext for World<'_> {
             .copied()
             .map_err(Into::into)
     }
+    fn noise_biome_is(&mut self, quart: [i32; 3], name: &str) -> Result<bool, PlacementQueryError> {
+        let id = self
+            .region
+            .noise_biome(&self.biomes, quart)
+            .map_err(PlacementQueryError::from)?;
+        self.biome_names
+            .get(id.0 as usize)
+            .map(|actual| actual.as_ref() == name)
+            .ok_or_else(|| PlacementQueryError::Failed("noise biome outside registry".into()))
+    }
     fn biome_allows_feature(
         &mut self,
         position: [i32; 3],
