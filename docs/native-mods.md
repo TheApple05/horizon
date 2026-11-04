@@ -3504,6 +3504,23 @@ The following catalog hooks are not in the trait yet:
 
 The client `tooltip_color` hook changes the background and top and bottom border gradient colours as mutable ARGB `u32` values; it does not change text colours. It covers solid-fill item tooltips (including creative, recipe book, chat, trading and bundle-selected item names), screen text boxes, and native panel tooltips. The stack is `None` for text-only boxes, including recipe-book item lines where the stack is discarded before drawing. Sprite-based screen tooltips (including options and title screens) use a separate renderer and are not covered; no texture hook is offered.
 
+# World-owned biome mappings
+
+A procedural generator can wrap a `ResolvedBiomeSource` with `with_mapper` and
+an `Arc<dyn BiomeMapper>`. Declare additional namespaced biome IDs in
+`additional_biomes` before constructing the pipeline. The mapper runs after the
+delegate's scalar or prepared-volume query, retains the delegate's search/tie
+state, and may return its input or one of the complete declared possible-biome
+set. Undeclared results and sampling errors propagate to the caller.
+
+The generator's native source module can call `Pipeline::new_with_biome_mapper`
+to install this wrapper before decoration and structure catalogs are built.
+Extra biome definitions and their features/tags still need registry resources.
+Delegate feature encounter order is preserved, with additional biomes appended;
+mapped decoration is world-owned so it cannot reuse a preloaded vanilla
+source-JSON cache entry. Dropping the world releases the mapper. Ordinary
+constructors pass no mapper and retain their original source.
+
 # Camera and collision reads
 
 The `native_camera()` helper returns the most recently extracted world frame's camera, or none before one exists. Its position, interpolated eye height, partial tick, angles, final FOV, near/far planes and dimension accompany column-major view and projection matrices. The view is camera-relative and includes bob and spin; projection uses reversed Z. Earlier callbacks in a frame can see the previous frame. `native_block_collision(pos)` returns block-local `[min_x, min_y, min_z, max_x, max_y, max_z]` boxes with an empty collision context; unloaded blocks and collision errors give no boxes.

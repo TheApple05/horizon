@@ -102,6 +102,11 @@ fn possible_biomes(source: &ResolvedBiomeSource) -> Vec<String> {
         .into_iter()
         .cloned()
         .collect(),
+        ResolvedBiomeSource::Mapped(source) => {
+            let mut names = possible_biomes(source.source());
+            names.extend(source.additional_biomes().iter().cloned());
+            names
+        }
         other => other
             .possible_biomes()
             .into_iter()
@@ -1591,6 +1596,47 @@ mod tests {
     use super::loot_table_nbt;
     use crate::registry::BlockRegistry;
     use horizon_core::random::{LegacyRandom, RandomSource};
+
+    #[test]
+    fn mapped_biomes_keep_delegate_encounter_order_before_new_features() {
+        use crate::worldgen::{
+            biome::MultiNoiseBiomeSource,
+            biome_source::{BiomeMapper, ResolvedBiomeSource},
+        };
+        #[derive(Debug)]
+        struct Mapper(Vec<String>);
+        impl BiomeMapper for Mapper {
+            fn additional_biomes(&self) -> &[String] {
+                &self.0
+            }
+            fn map<'a>(
+                &'a self,
+                parent: &'a str,
+                _: [i32; 3],
+            ) -> Result<&'a str, horizon_core::density::SampleError> {
+                Ok(parent)
+            }
+        }
+        let source = ResolvedBiomeSource::MultiNoise(
+            MultiNoiseBiomeSource::from_quantized_json(
+                r#"[
+            {"coordinates":[[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]],"offset":0,"biome":"z"},
+            {"coordinates":[[1,1],[0,0],[0,0],[0,0],[0,0],[0,0]],"offset":0,"biome":"a"}
+        ]"#,
+            )
+            .unwrap(),
+        );
+        let mapped = source
+            .with_mapper(std::sync::Arc::new(Mapper(vec![
+                "example:variant".into(),
+                "minecraft:z".into(),
+            ])))
+            .unwrap();
+        assert_eq!(
+            super::possible_biomes(&mapped),
+            ["minecraft:z", "minecraft:a", "example:variant"]
+        );
+    }
 
     /// Air, a chest, a dispenser and a furnace: one randomizable container the
     /// worldgen callers place, three they do not, and one plain container.
