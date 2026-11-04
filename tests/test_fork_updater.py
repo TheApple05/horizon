@@ -193,6 +193,31 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(self.updater.run()["status"], "backpressure")
         self.assertEqual(self.updater.status()["counts"], {"queued": 1})
 
+    def test_validated_item_can_retry_against_advanced_fork_base(self):
+        sha = self.commit("upstream-change")
+        self.updater.poll()
+        original = self.updater.run()
+        self.assertEqual(original["status"], "validated")
+        self.git(self.repo, "config", "user.email", "tests@example.invalid")
+        self.git(self.repo, "config", "user.name", "Tests")
+        (self.repo / "fork.txt").write_text("fork advanced")
+        self.git(self.repo, "add", "fork.txt")
+        self.git(self.repo, "commit", "-m", "advance fork")
+        advanced = self.git(self.repo, "rev-parse", "HEAD")
+        self.git(self.repo, "remote", "set-url", "origin", str(self.repo))
+        self.updater.poll()
+        self.updater.retry(sha)
+        self.assertEqual(self.updater.status()["counts"], {"queued": 1})
+        self.assertTrue(Path(original["run_dir"]).is_dir())
+        self.assertEqual(self.git(self.repo, "rev-parse", f"refs/fork-updater/validated/{sha}"), original["candidate"])
+        current = self.updater.run()
+        self.assertEqual(current["status"], "validated")
+        self.assertNotEqual(current["run_dir"], original["run_dir"])
+        self.assertNotEqual(current["candidate"], original["candidate"])
+        self.assertEqual(self.updater.status()["recent"][0]["base"], advanced)
+        self.assertEqual(self.git(self.repo, "rev-parse", f"refs/fork-updater/attempts/{sha}/{original['candidate']}"),
+                         original["candidate"])
+
     def test_service_once_polls_and_validates_one_commit(self):
         sha = self.commit("service-once")
         command = [sys.executable, str(Path(MODULE.__file__).with_name("fork_updater_service.py")),

@@ -252,10 +252,16 @@ class Updater:
 
     def retry(self, upstream):
         with lock(self.state / "worker.lock"), self.db:
+            row = self.db.execute("SELECT * FROM queue WHERE upstream=? AND status IN ('failed', 'validated')",
+                                  (upstream,)).fetchone()
+            if row is None:
+                raise ValueError("Retry requires the full SHA of an existing failed or validated item")
+            if row["status"] == "validated" and row["candidate"]:
+                self.git("update-ref", f"refs/fork-updater/attempts/{upstream}/{row['candidate']}", row["candidate"])
             changed = self.db.execute("UPDATE queue SET status='queued', error=NULL "
-                                      "WHERE upstream=? AND status='failed'", (upstream,)).rowcount
+                                      "WHERE upstream=? AND status IN ('failed', 'validated')", (upstream,)).rowcount
             if changed != 1:
-                raise ValueError("Retry requires the full SHA of an existing failed item")
+                raise RuntimeError("Queue item changed before retry could be recorded")
         return {"upstream": upstream, "status": "queued", "previous_attempts_retained": True}
 
 
@@ -266,7 +272,8 @@ def main():
     commands.add_parser("init").add_argument("--baseline", required=True)
     commands.add_parser("poll")
     commands.add_parser("run")
-    commands.add_parser("retry").add_argument("--upstream", required=True)
+    commands.add_parser("retry", help="Requeue a failed or validated item against the current fork base").add_argument(
+        "--upstream", required=True, help="Full upstream SHA of the failed or validated queue item")
     commands.add_parser("status").add_argument("--limit", type=int, default=10)
     args = parser.parse_args()
     updater = Updater(args.config)

@@ -23,7 +23,7 @@ From the workspace root:
 ```powershell
 python .local/updater/control/fork_updater.py --config .local/updater/config.json status
 python .local/updater/control/fork_updater.py --config .local/updater/config.json poll
-python .local/updater/control/fork_updater.py --config .local/updater/config.json retry --upstream FULL_FAILED_SHA
+python .local/updater/control/fork_updater.py --config .local/updater/config.json retry --upstream FULL_UPSTREAM_SHA
 ```
 
 ## What is tested
@@ -68,7 +68,13 @@ and evidence remain. Failed worktrees remain available for isolated repair.
 The heartbeat rechecks the current origin base, exact candidate SHA, gate config
 hash and all verdicts before pushing a candidate and opening a PR on the fork.
 Merge only after applicable CI checks pass. If origin/main advanced, revalidate
-the new integration instead of merging a stale candidate. Never force-push main.
+the new integration instead of merging a stale candidate: run `poll`, then `retry`
+with that validated row's full upstream SHA. Retry accepts failed or validated
+rows; queued and running rows are refused. The next attempt uses the refreshed
+fork base and a fresh directory. Previous logs remain, and previous validated
+commits are retained under `refs/fork-updater/attempts/UPSTREAM_SHA/CANDIDATE_SHA`.
+The main validated ref is replaced only after a new successful validation.
+Never force-push main.
 
 For a clear failure, repair in the retained isolated worktree, commit, run the
 same complete gate set on the exact repaired SHA, and open a repair PR. Do not
