@@ -9,7 +9,11 @@ import unittest
 
 SPEC = importlib.util.spec_from_file_location("fork_updater", Path(__file__).resolve().parents[1] / "tools/fork_updater.py")
 MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
+sys.path.insert(0, str(Path(SPEC.origin).parent))
+try:
+    SPEC.loader.exec_module(MODULE)
+finally:
+    sys.path.pop(0)
 
 
 class UpdaterTests(unittest.TestCase):

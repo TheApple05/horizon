@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from lab import game_env
 
 
 def main():
@@ -19,7 +20,7 @@ def main():
     if git("status", "--porcelain", "--untracked-files=no"):
         raise RuntimeError("Commit the candidate before building frozen binaries")
     subprocess.run(["cargo", "build", "--locked", "--profile", "fast", "-p", "horizon-client",
-                    "-p", "horizon-client-lib", "--bins"], cwd=args.candidate, check=True)
+                    "-p", "horizon-client-lib", "--bins"], cwd=args.candidate, check=True, env=game_env())
     if git("rev-parse", "HEAD") != revision or git("status", "--porcelain", "--untracked-files=no"):
         raise RuntimeError("Candidate changed during build; refusing to label these binaries")
     target = Path(os.environ.get("CARGO_TARGET_DIR", args.candidate / "target"))

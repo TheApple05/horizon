@@ -12,6 +12,7 @@ import socket
 import subprocess
 import threading
 import time
+from lab import game_env
 
 
 def varint(value):
@@ -49,8 +50,7 @@ def main():
         directory = output / key.lower()
         directory.mkdir()
         env[key] = str(directory)
-    env.update(HORIZON_OLDER_SERVERS="1", HORIZON_NO_AUDIO="1", HORIZON_NO_DISCORD="1",
-               HORIZON_LAUNCHER_NO_SELF_UPDATE="1", HORIZON_PLAYER_NAME="UpdaterTest")
+    env = game_env(env, HORIZON_OLDER_SERVERS="1", HORIZON_PLAYER_NAME="UpdaterTest")
     suffix = ".exe" if os.name == "nt" else ""
     game = args.binaries.resolve() / ("horizon-client" + suffix)
     control_tool = args.binaries.resolve() / ("horizon-ctl" + suffix)

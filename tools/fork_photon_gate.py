@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from lab import game_env
 
 
 def main():
@@ -30,6 +31,7 @@ def main():
                "--resources", str(args.resources.resolve()), "--compat", "--profile", args.profile,
                "--output", str(output / "captures")]
     env = {k: v for k, v in os.environ.items() if not k.startswith("HORIZON_")}
+    env = game_env(env)
     env["HORIZON_TELEMETRY_URL"] = "off"
     result = subprocess.run(command, env=env, timeout=1800,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

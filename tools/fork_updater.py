@@ -19,6 +19,8 @@ import sys
 import time
 import uuid
 
+from lab import game_env
+
 REQUIRED = {"build", "regression", "runtime", "mods"}
 
 
@@ -186,7 +188,7 @@ class Updater:
                 home = run_dir / key.lower()
                 home.mkdir()
                 env[key] = str(home)
-            env.update(HORIZON_LAUNCHER_NO_SELF_UPDATE="1", HORIZON_NO_AUDIO="1")
+            env = game_env(env)
             for key in ("HORIZON_SESSION_FILE", "HORIZON_SESSION_STDIN", "HORIZON_PLAYER_NAME"):
                 env.pop(key, None)
             for gate in gates:

@@ -9,10 +9,11 @@ $settings = Get-Content -LiteralPath $configuration -Raw | ConvertFrom-Json
 $controlRoot = Join-Path (Split-Path -Parent $configuration) 'control'
 New-Item -ItemType Directory -Path $controlRoot -Force | Out-Null
 $scriptNames = @('fork_updater.py', 'fork_updater_service.py', 'fork_build_candidate.py',
-    'fork_runtime_smoke.py', 'fork_photon_gate.py', 'fork_terra_gate.py')
+    'fork_runtime_smoke.py', 'fork_photon_gate.py', 'fork_terra_gate.py', 'lab.py')
 foreach ($scriptName in $scriptNames) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $scriptName) -Destination (Join-Path $controlRoot $scriptName) -Force
 }
+Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'research-lock.json') -Destination (Join-Path (Split-Path -Parent $configuration) 'research-lock.json') -Force
 $python = (Get-Command python.exe -ErrorAction Stop).Source
 $pythonWindowless = Join-Path (Split-Path -Parent $python) 'pythonw.exe'
 if (-not (Test-Path -LiteralPath $pythonWindowless -PathType Leaf)) {
