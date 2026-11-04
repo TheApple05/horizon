@@ -59,6 +59,18 @@ requires a farmer at work and `mob_griefing` enabled.
 
 ## Pinned to a Nightly
 
+### World-generation constructor injections
+
+`horizon_world::worldgen::generator::OverworldGenerator::for_world_with_settings`
+uses an explicit `Result<OverworldGenerator, GeneratorError>` return type so a
+revision-pinned native bundle can apply a cancellable HEAD hook with the pinned
+horizon-mixins tool. The type is the same as `Result<Self, GeneratorError>`;
+ordinary generation is unchanged. The constructor serves noise dimensions in
+single player and dedicated servers. A replacement must gate its intended
+dimension and world seed, supply coherent terrain, biome, surface and distant
+sampling behavior, and return an error when required data is unavailable.
+This is a revision-pinned injection target, not a numbered stable native hook.
+
 A native mod builds on one exact Horizon commit: `[compatibility] horizon_revision` in its `horizon-mixin.toml`,
 and `horizon` in the `horizon-native.json` of its registry file (`.hnmod`, `horizon_mods::index::native`). Mods
 pin a **Nightly's commit** (or a release's). Every Nightly ships its source and keeps its commit for good as the
