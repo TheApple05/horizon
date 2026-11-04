@@ -13,6 +13,7 @@
 //! game rules) is kept from the loaded files and written back unchanged.
 //! Worlds saved by older Horizon builds (`region/`, `DIM-1/`, `Player` in
 //! `level.dat`) are migrated on open.
+pub mod custom_presets;
 use crate::{
     Result,
     beehive::BeehiveExt,
@@ -3336,9 +3337,11 @@ pub enum WorldPreset {
     /// (`DebugLevelSource`). The create screen does not offer it; a data
     /// pack, `level-type` or a saved world names it.
     Debug,
+    /// A registered native preset; its metadata contains no world state.
+    Custom(custom_presets::RegisteredPreset),
 }
 impl WorldPreset {
-    /// The presets, in the order the world-type button cycles through them.
+    /// Built-in choices, in world-type button order before native additions.
     pub const ALL: [Self; 5] = [
         Self::Normal,
         Self::Flat,
@@ -3346,6 +3349,13 @@ impl WorldPreset {
         Self::Amplified,
         Self::SingleBiomeSurface,
     ];
+    /// Built-ins followed by native registrations in their encounter order.
+    pub fn all() -> Vec<Self> {
+        Self::ALL
+            .into_iter()
+            .chain(custom_presets::presets().into_iter().map(Self::Custom))
+            .collect()
+    }
     /// The preset's registry id (`minecraft:normal`).
     pub const fn id(self) -> &'static str {
         match self {
@@ -3355,11 +3365,12 @@ impl WorldPreset {
             Self::Amplified => "minecraft:amplified",
             Self::SingleBiomeSurface => "minecraft:single_biome_surface",
             Self::Debug => "minecraft:debug_all_block_states",
+            Self::Custom(preset) => preset.id(),
         }
     }
     /// The preset an id names, if it is one of them.
     pub fn of_id(id: &str) -> Option<Self> {
-        Self::ALL
+        Self::all()
             .into_iter()
             .chain([Self::Debug])
             .find(|preset| preset.id() == id)
@@ -3374,23 +3385,20 @@ impl WorldPreset {
             Self::Amplified => "generator.minecraft.amplified",
             Self::SingleBiomeSurface => "generator.minecraft.single_biome_surface",
             Self::Debug => "generator.minecraft.debug_all_block_states",
+            Self::Custom(preset) => preset.label(),
         }
     }
     /// The preset the world-type button cycles to next.
     pub fn next(self) -> Self {
-        let index = Self::ALL
-            .iter()
-            .position(|preset| *preset == self)
-            .unwrap_or(0);
-        Self::ALL[(index + 1) % Self::ALL.len()]
+        let all = Self::all();
+        let index = all.iter().position(|preset| *preset == self).unwrap_or(0);
+        all[(index + 1) % all.len()]
     }
     /// The preset the world-type button cycles to previously.
     pub fn prev(self) -> Self {
-        let index = Self::ALL
-            .iter()
-            .position(|preset| *preset == self)
-            .unwrap_or(0);
-        Self::ALL[(index + Self::ALL.len() - 1) % Self::ALL.len()]
+        let all = Self::all();
+        let index = all.iter().position(|preset| *preset == self).unwrap_or(0);
+        all[(index + all.len() - 1) % all.len()]
     }
     /// The preset a saved overworld generator is: the noise settings name
     /// the preset, and the single-biome preset shares the overworld's noise
@@ -3408,7 +3416,8 @@ impl WorldPreset {
             Some("minecraft:large_biomes") => Self::LargeBiomes,
             Some("minecraft:amplified") => Self::Amplified,
             Some("minecraft:overworld") if fixed => Self::SingleBiomeSurface,
-            _ => Self::Normal,
+            Some("minecraft:overworld") => Self::Normal,
+            _ => custom_presets::recognize(generator).map_or(Self::Normal, Self::Custom),
         }
     }
 }
@@ -3571,6 +3580,7 @@ pub fn write_world_gen_settings_with(
             "minecraft:overworld",
             preset("minecraft:overworld"),
         ),
+        WorldPreset::Custom(preset) => custom_presets::generate(preset)?,
         // worldgen/world_preset/debug_all_block_states.json's overworld.
         WorldPreset::Debug => Tag::compound([
             ("type", string("minecraft:overworld")),
