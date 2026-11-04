@@ -140,6 +140,21 @@ impl<'a> Reader<'a> {
         self.pos += used;
         Ok(tag)
     }
+    /// Before 1.20.2, FriendlyByteBuf.readNbt used a compound with a root name.
+    /// Component fields have their own codec and must not use this method.
+    pub fn named_nbt(&mut self) -> Result<Tag> {
+        let limits = nbt::Limits {
+            max_bytes: NBT_QUOTA,
+            ..nbt::Limits::default()
+        };
+        let (root, used) = nbt::read_named(&self.data[self.pos..], limits)
+            .map_err(|e| Error::new(format!("legacy NBT: {e}")))?;
+        if !matches!(root.tag, Tag::End | Tag::Compound(_)) {
+            return Err(Error::new("legacy NBT root is not a compound"));
+        }
+        self.pos += used;
+        Ok(root.tag)
+    }
     pub fn long_array(&mut self) -> Result<Vec<i64>> {
         let n = self.count(self.remaining() / 8)?;
         (0..n).map(|_| self.i64()).collect()
@@ -223,6 +238,21 @@ impl Writer {
         match nbt::write_network(tag, nbt::Limits::default()) {
             Ok(bytes) => self.data.extend_from_slice(&bytes),
             // Unencodable tags (too deep) are sent as "no tag".
+            Err(_) => self.data.push(0),
+        }
+    }
+    /// NbtIo.write's empty root name, for a legacy compound field only.
+    pub fn named_nbt(&mut self, tag: &Tag) {
+        if !matches!(tag, Tag::End | Tag::Compound(_)) {
+            self.data.push(0);
+            return;
+        }
+        let root = nbt::NamedTag {
+            name: Default::default(),
+            tag: tag.clone(),
+        };
+        match nbt::write_named(&root, nbt::Limits::default()) {
+            Ok(bytes) => self.data.extend_from_slice(&bytes),
             Err(_) => self.data.push(0),
         }
     }
@@ -589,6 +619,141 @@ macro_rules! packet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_nbt_keeps_the_legacy_root_name_inside_one_field() {
+        let expected = Tag::compound([("label", Tag::String("query".into()))]);
+        // The empty-name compound is the protocol763 vanilla writer layout; a nonempty
+        // name is skipped by NbtIo.read rather than becoming a compound child.
+        for prefix in [
+            &b"\x0a\x00\x00"[..],
+            &b"\x0a\x00\x04wire"[..],
+            &b"\x0a\x00\x02\xff\xff"[..],
+        ] {
+            let mut wire = prefix.to_vec();
+            wire.extend_from_slice(b"\x08\x00\x05label\x00\x05query\x00\x7e");
+            let mut r = Reader::new(&wire);
+            assert_eq!(r.named_nbt().unwrap(), expected);
+            assert_eq!(r.u8().unwrap(), 0x7e);
+            assert_eq!(r.remaining(), 0);
+        }
+        let mut absent = Reader::new(&[0, 0x7e]);
+        assert_eq!(absent.named_nbt().unwrap(), Tag::End);
+        assert_eq!(absent.u8().unwrap(), 0x7e);
+        let mut w = Writer::new();
+        w.named_nbt(&expected);
+        assert_eq!(w.data, b"\x0a\x00\x00\x08\x00\x05label\x00\x05query\x00");
+    }
+
+    #[test]
+    fn named_and_unnamed_nbt_round_trip_in_the_same_packet() {
+        let tag = Tag::compound([
+            ("bytes", Tag::ByteArray(vec![0, 127, 255])),
+            ("longs", Tag::LongArray(vec![i64::MIN, i64::MAX])),
+            (
+                "nested",
+                Tag::compound([("text", Tag::String("zero\0😀".into()))]),
+            ),
+        ]);
+        let component = Tag::String("Component".into());
+        let mut w = Writer::new();
+        w.named_nbt(&tag);
+        let component_start = w.data.len();
+        w.nbt(&component);
+        w.u8(99);
+        assert_eq!(&w.data[..3], &[10, 0, 0]);
+        assert_eq!(&w.data[component_start..component_start + 3], &[8, 0, 9]);
+        let mut r = Reader::new(&w.data);
+        assert_eq!(r.named_nbt().unwrap(), tag);
+        assert_eq!(r.position(), component_start);
+        assert_eq!(r.nbt().unwrap(), component);
+        assert_eq!(r.u8().unwrap(), 99);
+        assert_eq!(r.remaining(), 0);
+    }
+
+    #[test]
+    fn named_nbt_rejects_noncompound_roots_and_truncated_fields_without_advancing() {
+        for tag in [
+            Tag::Byte(1),
+            Tag::Int(4),
+            Tag::String("text".into()),
+            Tag::List(vec![]),
+        ] {
+            let wire = nbt::write_named(
+                &nbt::NamedTag {
+                    name: Default::default(),
+                    tag: tag.clone(),
+                },
+                nbt::Limits::default(),
+            )
+            .unwrap();
+            let mut r = Reader::new(&wire);
+            assert!(r.named_nbt().is_err(), "{tag:?}");
+            assert_eq!(r.position(), 0);
+            let mut w = Writer::new();
+            w.named_nbt(&tag);
+            assert_eq!(w.data, [0]);
+        }
+        for wire in [
+            &b""[..],
+            &b"\x0a"[..],
+            &b"\x0a\x00"[..],
+            &b"\x0a\x00\x02x"[..],
+            &b"\x0a\x00\x00\x01\x00\x01x"[..],
+            &b"\x0a\x00\x00\x0d\x00\x00"[..],
+            &b"\x0a\x00\x00\x07\x00\x01x\xff\xff\xff\xff\x00"[..],
+        ] {
+            let mut r = Reader::new(wire);
+            assert!(r.named_nbt().is_err(), "{wire:?}");
+            assert_eq!(r.position(), 0);
+            assert_eq!(r.remaining(), wire.len());
+        }
+    }
+
+    #[test]
+    fn named_nbt_quota_includes_the_name_and_leaves_later_fields_unread() {
+        // Named compound + one byte-array child called x consumes twelve framing bytes.
+        let mut at_limit = Writer::new();
+        at_limit.named_nbt(&Tag::compound([(
+            "x",
+            Tag::ByteArray(vec![7; NBT_QUOTA - 12]),
+        )]));
+        assert_eq!(at_limit.data.len(), NBT_QUOTA);
+        at_limit.u8(99);
+        let mut r = Reader::new(&at_limit.data);
+        let tag = r.named_nbt().unwrap();
+        assert!(matches!(tag.get("x"), Some(Tag::ByteArray(v)) if v.len() == NBT_QUOTA - 12));
+        assert_eq!(r.position(), NBT_QUOTA);
+        assert_eq!(r.u8().unwrap(), 99);
+        let mut over = Writer::new();
+        over.named_nbt(&Tag::compound([(
+            "x",
+            Tag::ByteArray(vec![7; NBT_QUOTA - 11]),
+        )]));
+        assert_eq!(over.data.len(), NBT_QUOTA + 1);
+        let mut r = Reader::new(&over.data);
+        assert!(r.named_nbt().is_err());
+        assert_eq!(r.position(), 0);
+
+        let mut named = b"\x0a\x00\x04wire".to_vec();
+        named.extend_from_slice(&at_limit.data[3..NBT_QUOTA]);
+        let mut r = Reader::new(&named);
+        assert!(r.named_nbt().is_err());
+        assert_eq!(r.position(), 0);
+    }
+
+    #[test]
+    fn named_nbt_writer_depth_failure_emits_only_the_absent_tag() {
+        let mut tag = Tag::Byte(0);
+        for _ in 0..513 {
+            tag = Tag::compound([("x", tag)]);
+        }
+        let mut w = Writer::new();
+        w.u8(11);
+        w.named_nbt(&tag);
+        w.u8(22);
+        assert_eq!(w.data, [11, 0, 22]);
+    }
 
     fn round<T: PartialEq + std::fmt::Debug, C: Codec<T>>(v: T) -> Vec<u8> {
         let mut w = Writer::new();

@@ -101,6 +101,7 @@ pub fn inputs() -> horizon_shaders::GbuffersInputs {
             op: ">",
             reference: 0.1,
         }),
+        item_id_declared: false,
     }
 }
 
@@ -162,6 +163,7 @@ pub fn cloud_inputs() -> horizon_shaders::GbuffersInputs {
             .collect(),
         after: String::new(),
         alpha_test: None,
+        item_id_declared: false,
     }
 }
 
@@ -426,7 +428,9 @@ impl PackEntities {
                     }),
                 };
                 let pack = program.is_some_and(|p| drawn[p]) && !span.hidden;
-                let casts = part == Part::Plain && program.is_some_and(|p| shadow.cast(&span, p));
+                // Portal faces cast too (a pack's shadow pass sees block entities whole, as Iris
+                // draws them); beams do not.
+                let casts = part != Part::Beam && program.is_some_and(|p| shadow.cast(&span, p));
                 if !pack && !span.hidden {
                     extend_without_portals(rest, run);
                 }
@@ -510,14 +514,14 @@ impl PackEntities {
             BLOCK => (0, span.id),
             _ => (span.id, 0),
         };
-        let mut bytes = [0u8; SLOT as usize];
-        bytes[0..4].copy_from_slice(&(span.stage as i32).to_le_bytes());
-        bytes[4..8].copy_from_slice(&entity_id.to_le_bytes());
-        bytes[8..12].copy_from_slice(&block_id.to_le_bytes());
         // The overlay: the layer's low 16 bits (HDR output's tier rides in the high ones).
-        for (i, c) in entity_color(overlay & 0xffff).iter().enumerate() {
-            bytes[16 + 4 * i..20 + 4 * i].copy_from_slice(&c.to_le_bytes());
-        }
+        let bytes = super::pack_draw::encode(
+            span.stage,
+            entity_id,
+            block_id,
+            span.item_id,
+            entity_color(overlay & 0xffff),
+        );
         self.uniforms.extend_from_slice(&bytes);
         self.uniforms
             .resize(self.uniforms.len() + (self.stride - SLOT) as usize, 0);
@@ -1030,6 +1034,57 @@ mod gpu_span_tests {
         skin.truncate((2, 0, 8));
         assert_eq!(skin.vertices, 8);
         assert_eq!(skin.spans.len(), 1);
+    }
+
+    #[test]
+    fn end_portal_faces_reach_the_shadow_pass_with_their_block_entity() {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+            return;
+        };
+        let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+        else {
+            return;
+        };
+        let layout = super::super::pack_draw::DrawUniforms::new(&device);
+        let mut geometry = PackEntities::new(&device, &layout.layout);
+        // One block entity: a plain face, then an End portal face (overlay layer 9).
+        let cpu: Vec<Vertex> = [0, 0, 0, 0, 9, 9, 9, 9]
+            .into_iter()
+            .map(|layer| Vertex {
+                layer,
+                ..bytemuck::Zeroable::zeroed()
+            })
+            .collect();
+        let spans = [EntitySpan {
+            start: 0,
+            id: 99,
+            stage: render_stage("BLOCK_ENTITIES"),
+            ..Default::default()
+        }];
+        let mut rest = Vec::new();
+        geometry.prepare(
+            &device,
+            &queue,
+            &layout.layout,
+            &cpu,
+            &spans,
+            [true; PROGRAMS],
+            ([0.; 4], [1; 2]),
+            Casters {
+                blocks: true,
+                ..Default::default()
+            },
+            &mut rest,
+            None,
+        );
+        assert_eq!(
+            (geometry.draws.iter())
+                .map(|d| (d.portal, d.shadow))
+                .collect::<Vec<_>>(),
+            [(false, true), (true, true)],
+            "the portal face casts as its block entity does"
+        );
     }
 
     #[test]

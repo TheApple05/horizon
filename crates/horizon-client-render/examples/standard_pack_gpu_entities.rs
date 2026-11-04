@@ -46,14 +46,19 @@ impl native_render::RenderHooks for Observer {
 }
 
 fn pack(renderer: &mut Renderer, folder: &Path, valid: bool) {
+    let fragment = "#version 120\nuniform int entityId; uniform int blockEntityId; uniform vec4 entityColor; void main(){gl_FragData[0]=vec4(float(entityId)/255.0,entityColor.a,float(blockEntityId)/255.0,1.0);}\n";
+    pack_fragment(renderer, folder, valid, fragment);
+}
+
+fn pack_fragment(renderer: &mut Renderer, folder: &Path, valid: bool, fragment: &str) {
     let shaders = folder.join("shaders");
     std::fs::create_dir_all(&shaders).unwrap();
     let vertex = "#version 120\nvarying vec2 uv; void main(){gl_Position=ftransform();uv=gl_MultiTexCoord0.xy;}\n";
-    let fragment = "#version 120\nuniform int entityId; uniform int blockEntityId; uniform vec4 entityColor; void main(){gl_FragData[0]=vec4(float(entityId)/255.0,entityColor.a,float(blockEntityId)/255.0,1.0);}\n";
     for program in [
         "gbuffers_entities",
         "gbuffers_block",
         "gbuffers_entities_translucent",
+        "gbuffers_hand",
     ] {
         std::fs::write(shaders.join(format!("{program}.vsh")), vertex).unwrap();
         std::fs::write(
@@ -79,7 +84,10 @@ fn pack(renderer: &mut Renderer, folder: &Path, valid: bool) {
     let (properties, _) = horizon_shaders::read_properties(&pack, &mut macros);
     let post = horizon_shaders::load_post(&pack, "", &properties, &macros, &renderer.pack_inputs());
     assert_eq!(post.notes.is_empty(), valid, "{:?}", post.notes);
-    let (_, notes) = renderer.set_shader_pack(0, Some(post), &[]).unwrap();
+    let (_, notes) = renderer
+        .set_shader_pack(0, Some(post), &[])
+        .unwrap()
+        .unwrap();
     assert!(
         !valid || notes.iter().all(|n| !n.contains("skipped")),
         "{notes:?}"
@@ -94,6 +102,25 @@ fn read(path: &Path) -> Vec<u8> {
     assert_eq!(info.color_type, png::ColorType::Rgba);
     bytes.truncate(info.buffer_size());
     bytes
+}
+
+fn pixels(bytes: &[u8], rgb: [u8; 3]) -> usize {
+    bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| pixel[..3] == rgb)
+        .count()
+}
+
+fn capture(renderer: &mut Renderer, frame: &Frame<'_>, path: &Path) -> Vec<u8> {
+    renderer.screenshot = Some(ScreenshotRequest {
+        path: path.to_owned(),
+        size: None,
+        scaled: false,
+    });
+    renderer.render(frame).unwrap();
+    read(path)
 }
 
 fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
@@ -120,6 +147,7 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         None,
         None,
         GraphicsApi::Vulkan,
+        false,
         false,
         true,
     ))?;
@@ -249,6 +277,122 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         "CPU and GPU standard-pack pixels"
     );
 
+    // Encode the real per-draw item identity into the target. Blue marks the
+    // exact non-item sentinel (-1), rather than confusing it with item id 0.
+    // Keep this independent of the entity id in green: changing only the item
+    // must not overwrite an enclosing entity's identity or share the last slot.
+    let item_fragment = "#version 120\nuniform int entityId; uniform int currentRenderedItemId; void main(){gl_FragData[0]=vec4(float(max(currentRenderedItemId,0))/255.0,float(entityId)/255.0,currentRenderedItemId == -1 ? 1.0 : 0.0,1.0);}\n";
+    frame.skin = None;
+    pack_fragment(
+        &mut renderer,
+        &out.join("item-id-pack"),
+        true,
+        item_fragment,
+    );
+    let mut item_spans = spans.clone();
+    item_spans[0].item_id = Some(17);
+    item_spans[1].item_id = Some(29);
+    // This body's pixels follow both items and must receive the non-item
+    // sentinel. The earlier fixture separately checks the hidden-caster path.
+    item_spans[2].hidden = false;
+    frame.entities = &cpu;
+    frame.entity_spans = &item_spans;
+    let item_cpu = capture(&mut renderer, &frame, &out.join("item-cpu.png"));
+    let world_item_pixels = [
+        pixels(&item_cpu, [17, 77, 0]),
+        pixels(&item_cpu, [29, 88, 0]),
+        pixels(&item_cpu, [0, 99, 255]),
+    ];
+    for (subject, count) in ["first world item", "second world item", "following body"]
+        .into_iter()
+        .zip(world_item_pixels)
+    {
+        assert!(
+            count > 100,
+            "{subject} received its independent ID in only {count} pixels"
+        );
+    }
+    let item_skin = SkinFrame {
+        reset: true,
+        base: skin.base,
+        new_model: skin.new_model.clone(),
+        parts: skin.parts.clone(),
+        jobs: skin.jobs.clone(),
+        spans: item_spans.clone(),
+        vertices: skin.vertices,
+        ..Default::default()
+    };
+    frame.entities = &[];
+    frame.entity_spans = &[];
+    frame.skin = Some(&item_skin);
+    assert_eq!(
+        capture(&mut renderer, &frame, &out.join("item-gpu.png")),
+        item_cpu,
+        "CPU and GPU item/entity-ID pixels"
+    );
+
+    // Arms and both held items share the hand vertex stream, but must bind
+    // distinct draw slots under gbuffers_hand. The preceding world draw ends
+    // in item 29; an arm must still start at the exact non-item sentinel.
+    let hand_spans = [
+        EntitySpan::default(),
+        EntitySpan {
+            start: 4,
+            item_id: Some(17),
+            ..Default::default()
+        },
+        EntitySpan {
+            start: 8,
+            item_id: Some(29),
+            ..Default::default()
+        },
+    ];
+    let mut hand_world_spans = item_spans.clone();
+    hand_world_spans[2].hidden = true;
+    frame.skin = None;
+    frame.entities = &cpu;
+    frame.entity_spans = &hand_world_spans;
+    frame.hand = &cpu;
+    frame.hand_spans = &hand_spans;
+    let hand = capture(&mut renderer, &frame, &out.join("hand-items.png"));
+    let hand_item_pixels = [
+        pixels(&hand, [0, 0, 255]),
+        pixels(&hand, [17, 0, 0]),
+        pixels(&hand, [29, 0, 0]),
+    ];
+    for (subject, count) in ["arm reset", "main-hand item", "off-hand item"]
+        .into_iter()
+        .zip(hand_item_pixels)
+    {
+        assert!(
+            count > 100,
+            "{subject} received its independent ID in only {count} pixels"
+        );
+    }
+    // On the next frame all the same geometry is an arm/body stream. Old hand
+    // item identities must disappear even when its uniform allocation is reused.
+    let no_item_spans = [EntitySpan::default()];
+    frame.hand_spans = &no_item_spans;
+    let reset = capture(&mut renderer, &frame, &out.join("hand-reset.png"));
+    assert_eq!(
+        pixels(&reset, [17, 0, 0]),
+        0,
+        "main-hand ID leaked into a non-item frame"
+    );
+    assert_eq!(
+        pixels(&reset, [29, 0, 0]),
+        0,
+        "off-hand ID leaked into a non-item frame"
+    );
+    let reset_pixels = pixels(&reset, [0, 0, 255]);
+    assert_eq!(
+        reset_pixels,
+        hand_item_pixels.iter().sum::<usize>(),
+        "all previous hand/item pixels must now have the non-item sentinel"
+    );
+    frame.hand = &[];
+    frame.hand_spans = &[];
+
     NEEDS_SPANS.store(true, Ordering::Relaxed);
     assert!(
         !renderer.skins_entities(),
@@ -277,6 +421,10 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_vec_pretty(&serde_json::json!({
             "cpu_gpu_pixels_equal": true, "entity_id_hurt_pixels": matches, "hidden_subject_pixels": 0,
                 "entity_id_white_flash_pixels": white,
+                "world_item_body_pixels": world_item_pixels,
+                "item_cpu_gpu_pixels_equal": true,
+                "hand_arm_main_off_pixels": hand_item_pixels,
+                "hand_non_item_reset_pixels": reset_pixels,
                 "graphics_adapter": client::crash::system_details("fixture").into_iter()
                     .find(|(name, _)| name == "Graphics Adapter").map(|(_, detail)| detail),
             "native_observer_frames": OBSERVED.load(Ordering::Relaxed), "player_game_started": false,
@@ -377,6 +525,7 @@ fn fixture_frame(hud: &HudBatch) -> Frame<'_> {
         celestial: &[],
         stars: None,
         hand: &[],
+        hand_spans: &[],
         hand_fov_degrees: 70.0,
         screen: &[],
         pack: Default::default(),

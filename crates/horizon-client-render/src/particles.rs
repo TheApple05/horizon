@@ -26,6 +26,8 @@ use std::{
 
 pub use horizon_client_core::particle_type::ParticleType;
 pub use horizon_items::firework::{DYE_FIREWORK_COLORS, FireworkExplosion, FireworkShape};
+mod native;
+pub use native::{ParticleController, ParticleUpdate};
 
 /// `ParticleOptions` with the parameters of the option classes used here.
 #[derive(Clone, Debug)]
@@ -54,6 +56,8 @@ pub struct ParticleOptions {
     /// A native mod's own particle type, by its namespaced name (`mymod:spark`):
     /// `SimpleParticleType` plus the provider `particles/<name>.json` names.
     pub mod_particle: Option<String>,
+    /// Pre-1.20.5 entity-effect providers use spawn velocity as RGB; true is the ambient provider.
+    pub legacy_entity_effect: Option<bool>,
 }
 impl ParticleOptions {
     pub fn simple(ty: ParticleType) -> Self {
@@ -68,6 +72,7 @@ impl ParticleOptions {
             geyser: None,
             vibration: None,
             mod_particle: None,
+            legacy_entity_effect: None,
         }
     }
     /// A native mod's `SimpleParticleType`: the sprite set of
@@ -212,6 +217,9 @@ enum Light {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Behaviour {
     Base,
+    Controlled {
+        translucent: bool,
+    },
     Mod {
         size: [f32; 2],
         alpha: [f32; 2],
@@ -505,6 +513,7 @@ pub struct Particle {
     pre_tick: bool,
     /// `Particle.random`: the particle's own generator (`RandomSource.create()`).
     random: LegacyRandom,
+    controller: Option<Box<dyn native::Controller>>,
 }
 fn aabb_at(p: [f64; 3], w: f32, h: f32) -> Aabb {
     let w = f64::from(w) / 2.0;
@@ -650,6 +659,30 @@ pub fn around_self(
             feet[2] + width * ((2.0 * random.next_double() - 1.0) * 1.0),
         ];
         emit(p, v);
+    }
+}
+
+/// `LivingEntity.handleEntityEvent(46)`: 128 `ParticleTypes.PORTAL` samples
+/// from the entity's old position (`xo`, `yo`, `zo`) to its current one,
+/// spread across the bounding box (`getBbWidth() * 2` on x and z, `getBbHeight`
+/// on y). The speeds are `(nextFloat() - 0.5) * 0.2`.
+pub fn living_teleport_particles(
+    random: &mut impl RandomSource,
+    from: [f64; 3],
+    to: [f64; 3],
+    width: f64,
+    height: f64,
+    mut emit: impl FnMut([f64; 3], [f64; 3]),
+) {
+    for i in 0..128 {
+        let d = i as f64 / 127.0;
+        let velocity = [0; 3].map(|_| f64::from((random.next_float() - 0.5) * 0.2));
+        let position = [
+            from[0] + d * (to[0] - from[0]) + (random.next_double() - 0.5) * width * 2.0,
+            from[1] + d * (to[1] - from[1]) + random.next_double() * height,
+            from[2] + d * (to[2] - from[2]) + (random.next_double() - 0.5) * width * 2.0,
+        ];
+        emit(position, velocity);
     }
 }
 
@@ -841,7 +874,36 @@ impl Particle {
             pre_tick: false,
             frame_ticks: 0,
             random: LegacyRandom::new(0),
+            controller: None,
         }
+    }
+    /// The normal age/removal test and previous pose, without vanilla motion.
+    /// Returns false when this tick expires the particle.
+    pub fn advance_age(&mut self) -> bool {
+        self.previous = self.position;
+        self.o_roll = self.roll;
+        let alive = self.age < self.lifetime;
+        self.age = self.age.saturating_add(1);
+        self.removed |= !alive;
+        alive
+    }
+    pub fn remove(&mut self) {
+        self.removed = true;
+    }
+    /// Hide geometry while retaining the particle's lifetime and controller.
+    pub fn set_visible(&mut self, visible: bool) {
+        self.no_render = !visible;
+    }
+    /// The particle's own random, distinct from the engine and level generators.
+    pub fn random(&mut self) -> &mut LegacyRandom {
+        &mut self.random
+    }
+    pub fn set_full_bright(&mut self, full_bright: bool) {
+        self.light = if full_bright {
+            Light::FullBright
+        } else {
+            Light::World
+        };
     }
     /// `Particle(level, x, y, z, xa, ya, za)`: jittered, normalized initial velocity.
     fn moving(random: &mut LegacyRandom, ty: ParticleType, p: [f64; 3], v: [f64; 3]) -> Self {
@@ -1420,6 +1482,10 @@ impl ParticleEngine {
         atlas: &HashMap<String, Rect>,
         translucent: &HashSet<String>,
     ) {
+        // Controllers' numeric sprite-set handles belong to this resource
+        // generation. Discard them rather than selecting another set after reload.
+        self.particles.retain(|p| p.controller.is_none());
+        self.pending.retain(|p| p.controller.is_none());
         self.atlas = atlas
             .iter()
             .map(|(name, &rect)| (name.clone(), (rect, translucent.contains(name))))
@@ -1583,6 +1649,45 @@ impl ParticleEngine {
     /// `ParticleEngine.add` (via `particlesToAdd`, applied on the next tick).
     pub fn push(&mut self, particle: Particle) {
         self.pending.push(particle);
+    }
+    /// Create a named billboard with custom compiled behavior and no vanilla
+    /// motion. Like `add`, respects camera distance and the Particles setting.
+    /// Configure its public fields, then `push` it to the ordinary engine queue.
+    /// Missing sprite sets return None. The constructor has the ordinary
+    /// stationary SingleQuadParticle random size/lifetime and no velocity draws.
+    pub fn controlled<C: ParticleController>(
+        &mut self,
+        name: &str,
+        position: [f64; 3],
+        translucent: bool,
+        controller: C,
+    ) -> Option<Particle> {
+        let minimal = self.calculate_particle_level(false) == 2;
+        let distance: f64 = position
+            .iter()
+            .zip(self.camera)
+            .map(|(p, c)| (p - c).powi(2))
+            .sum();
+        if minimal || !distance.is_finite() || distance > 1024.0 {
+            return None;
+        }
+        let (set, _) = *self.mod_sets.get(name)?;
+        let mut random = LegacyRandom::new(self.seeds.next_long());
+        let mut particle = Particle::at(&mut random, ParticleType::Smoke, position);
+        particle.random = random;
+        particle.set = Some(set);
+        particle.sprite = Sprite::Index(*self.set_sprites.get(set as usize)?.first()?);
+        particle.behaviour = Behaviour::Controlled { translucent };
+        particle.controller = Some(Box::new(controller));
+        Some(particle)
+    }
+    /// Choose a frame from this particle's declared sprite set.
+    pub fn set_sprite_frame(&self, particle: &mut Particle, frame: usize) {
+        if let Some(sprites) = particle.set.and_then(|s| self.set_sprites.get(s as usize))
+            && !sprites.is_empty()
+        {
+            particle.sprite = Sprite::Index(sprites[frame.min(sprites.len() - 1)]);
+        }
     }
     /// Random generator shared by particle constructors and spawners.
     pub fn random(&mut self) -> &mut LegacyRandom {
@@ -3062,8 +3167,16 @@ impl ParticleEngine {
                         q.set_color(b, 0.0, b);
                     }
                     T::EntityEffect => {
-                        q.set_color(o.color[0], o.color[1], o.color[2]);
-                        q.rgba[3] = o.color[3];
+                        if let Some(ambient) = o.legacy_entity_effect {
+                            q.set_color(v[0] as f32, v[1] as f32, v[2] as f32);
+                            // AmbientMobProvider overrides constructor alpha; MobProvider only sets RGB.
+                            if ambient {
+                                q.rgba[3] = 0.15;
+                            }
+                        } else {
+                            q.set_color(o.color[0], o.color[1], o.color[2]);
+                            q.rgba[3] = o.color[3];
+                        }
                     }
                     T::Effect | T::InstantEffect => {
                         q.set_color(o.color[0], o.color[1], o.color[2]);
@@ -3072,7 +3185,12 @@ impl ParticleEngine {
                     _ => {}
                 }
                 q.behaviour = Behaviour::Spell {
-                    original_alpha: q.rgba[3],
+                    // The old SpellParticle.tick always eased back to 1, including ambient effects.
+                    original_alpha: if o.legacy_entity_effect.is_some() {
+                        1.0
+                    } else {
+                        q.rgba[3]
+                    },
                 };
                 q.set = set;
                 q
@@ -3364,7 +3482,13 @@ impl ParticleEngine {
                     scaled(o.color[2], jb),
                 );
                 q.size = 0.26;
-                q.lifetime = duration;
+                // The older-server adapter marks pre-1.21.4 TargetColorParticleOption with -1.
+                // Its TrailParticle.Provider chose nextInt(40) + 10 after constructing the particle.
+                q.lifetime = if duration == -1 {
+                    self.level_random.next_int_bound(40).unwrap_or(0) + 10
+                } else {
+                    duration
+                };
                 q.has_physics = false;
                 q.free_move = true;
                 q.light = Light::FullBright;
@@ -3710,6 +3834,20 @@ impl ParticleEngine {
     fn tick_particle(&mut self, p: &mut Particle, level: &ParticleLevel) {
         match p.behaviour {
             Behaviour::Base => p.base_tick(level),
+            Behaviour::Controlled { .. } => {
+                if let Some(mut controller) = p.controller.take() {
+                    let update = controller.tick(p, level);
+                    p.controller = Some(controller);
+                    if let Some(frame) = update.frame {
+                        self.set_sprite_frame(p, frame);
+                    }
+                    for (options, pos, velocity) in update.spawned {
+                        self.add(&options, pos, velocity);
+                    }
+                } else {
+                    p.remove();
+                }
+            }
             Behaviour::Mod { size, alpha } => {
                 p.base_tick(level);
                 p.size = mod_curve(size, p.age, p.lifetime);
@@ -4627,6 +4765,7 @@ impl ParticleEngine {
                 Sprite::Index(i) => (
                     self.rects.get(*i as usize).copied().flatten(),
                     p.ty.translucent_layer()
+                        || matches!(p.behaviour, Behaviour::Controlled { translucent: true })
                         || matches!(p.behaviour, Behaviour::Mod { alpha, .. } if alpha != [1.0; 2]),
                 ),
                 Sprite::Named(name) => match self.atlas.get(name) {
@@ -4820,6 +4959,45 @@ const CREEPER: [[f64; 2]; 12] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_spell_providers_use_velocity_rgb_and_their_original_alpha_rules() {
+        let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+        let velocity = [0.25, 0.5, 0.75];
+        for scoped in [false, true] {
+            engine.set_scope_eye(scoped.then_some([0.0; 3]));
+            for ambient in [false, true] {
+                let mut options =
+                    ParticleOptions::colored(ParticleType::EntityEffect, [1.0, 0.0, 0.0, 0.8]);
+                options.legacy_entity_effect = Some(ambient);
+                let particle = engine.make(&options, [0.0; 3], velocity, 7).unwrap();
+                let alpha = if ambient {
+                    0.15
+                } else if scoped {
+                    0.0
+                } else {
+                    1.0
+                };
+                assert_eq!(particle.rgba, [0.25, 0.5, 0.75, alpha]);
+                assert_eq!(
+                    particle.behaviour,
+                    Behaviour::Spell {
+                        original_alpha: 1.0
+                    }
+                );
+            }
+            let options =
+                ParticleOptions::colored(ParticleType::EntityEffect, [1.0, 0.0, 0.0, 0.8]);
+            let current = engine.make(&options, [0.0; 3], velocity, 7).unwrap();
+            assert_eq!(current.rgba, options.color);
+            assert_eq!(
+                current.behaviour,
+                Behaviour::Spell {
+                    original_alpha: 0.8
+                }
+            );
+        }
+    }
 
     #[test]
     fn particle_light_cache_reuses_exact_blocks_and_fails_open_on_collisions() {
@@ -5318,6 +5496,47 @@ mod tests {
         ));
     }
 
+    /// `LivingEntity.handleEntityEvent(46)`: 128 samples, the first on the old
+    /// box and the last on the new one, with speeds inside ±0.1.
+    #[test]
+    fn living_teleport_particles_span_the_old_and_new_boxes() {
+        let mut random = LegacyRandom::new(1);
+        let mut samples = Vec::new();
+        living_teleport_particles(
+            &mut random,
+            [0.0, 1.0, 0.0],
+            [8.0, 1.0, 0.0],
+            0.6,
+            1.8,
+            |p, v| samples.push((p, v)),
+        );
+        assert_eq!(samples.len(), 128);
+        let first = samples[0].0;
+        let last = samples[127].0;
+        assert!(first[0].abs() <= 0.6, "{first:?}");
+        assert!((1.0..2.8).contains(&first[1]), "{first:?}");
+        assert!(first[2].abs() <= 0.6, "{first:?}");
+        assert!((7.4..8.6).contains(&last[0]), "{last:?}");
+        assert!((1.0..2.8).contains(&last[1]), "{last:?}");
+        assert!(last[2].abs() <= 0.6, "{last:?}");
+        // `(nextDouble - 0.5) * width * 2` reaches ±width. A spread of only
+        // `width` (the factor of 2 dropped) stays inside 0.3 of the line.
+        let edge = samples
+            .iter()
+            .enumerate()
+            .map(|(i, (p, _))| {
+                let along = (i as f64 / 127.0) * 8.0;
+                (p[0] - along).abs()
+            })
+            .fold(0.0_f64, f64::max);
+        assert!(edge > 0.45, "box spread reached only {edge}");
+        for (_, v) in &samples {
+            for c in v {
+                assert!((-0.1..0.1).contains(c), "{v:?}");
+            }
+        }
+    }
+
     #[test]
     fn egg_teleport_unpacks_offsets_and_preserves_seeded_draw_order() {
         let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
@@ -5536,6 +5755,33 @@ mod tests {
         let s =
             (p.velocity[0].powi(2) + (p.velocity[1] - 0.1).powi(2) + p.velocity[2].powi(2)).sqrt();
         assert!((0.15 * 0.4 - 1e-6..=0.45 * 0.4 + 1e-6).contains(&s));
+    }
+    #[test]
+    fn legacy_trails_choose_a_lifetime_for_each_particle_from_the_level_random() {
+        let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+        engine.seed_randoms(1, 42, 2);
+        for _ in 0..5 {
+            engine.create(
+                &ParticleOptions::trail([1.0, 2.0, 3.0], 0x7f3f1f, -1),
+                [0.0; 3],
+                [0.0; 3],
+            );
+        }
+        // java.util.Random(42).nextInt(40) + 10, as vanilla 1.21.3 TrailParticle.Provider does.
+        assert_eq!(
+            engine
+                .pending
+                .iter()
+                .map(|p| p.lifetime)
+                .collect::<Vec<_>>(),
+            [20, 13, 18, 14, 20]
+        );
+        engine.create(
+            &ParticleOptions::trail([1.0, 2.0, 3.0], 0x7f3f1f, 37),
+            [0.0; 3],
+            [0.0; 3],
+        );
+        assert_eq!(engine.pending.last().unwrap().lifetime, 37);
     }
     #[test]
     fn sizes_follow_vanilla_curves() {

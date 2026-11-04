@@ -14,6 +14,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod version_select;
+
 const SERVER_NAME: crate::clipboard::FieldId = ("server.name", 0);
 const SERVER_ADDRESS: crate::clipboard::FieldId = ("server.address", 0);
 const SERVER_DIRECT: crate::clipboard::FieldId = ("server.direct", 0);
@@ -62,7 +64,7 @@ impl Ping {
         .with_color(DARK_GRAY)
     }
 }
-/// ServerStatusPinger: each sample name as a literal line (its `§` codes
+/// ServerStatusPinger: each sample name as a literal line (its `Â§` codes
 /// styled as the font does), then `multiplayer.status.and_more` for the
 /// players the sample leaves out.
 fn player_list(players: &serde_json::Value, online: i64) -> Vec<Text> {
@@ -111,6 +113,8 @@ pub enum Screen {
     Direct {
         address: String,
     },
+    /// The ViaFabricPlus-style protocol selection menu, implemented natively.
+    Versions(version_select::Selector),
     /// ConfirmScreen for Delete: the list it returns to, the server's name
     /// and how many lines the warning took when last drawn.
     ConfirmDelete {
@@ -149,6 +153,7 @@ impl Screen {
             Self::Edit { index: None, .. } => "add_server",
             Self::Edit { index: Some(_), .. } => "edit_server",
             Self::Direct { .. } => "direct_connect",
+            Self::Versions(_) => "protocol_selection",
             Self::ConfirmDelete { .. } => "server_delete",
             Self::Friend { .. } => "friends_join",
             Self::Disconnected { .. } => "disconnected",
@@ -389,6 +394,55 @@ pub fn add_official_server(game_dir: &Path) -> std::io::Result<()> {
         servers::prepend(&file, &ServerEntry::new(name, address))?;
     }
     std::fs::write(marker, format!("{address}\n"))
+}
+
+/// Servers Horizon partners with, offered once below the official server: a name (with the
+/// players it is for) and an address like any entry.
+pub const PARTNER_SERVERS: &[(&str, &str)] =
+    &[("Afri-Network (South Africa)", "afri-network.co.za")];
+/// Beside servers.dat: the partner addresses already offered, one per line, so a player who
+/// deletes one never gets it back.
+const PARTNER_MARKER: &str = "horizon_partner_servers.txt";
+
+/// Adds each partner server not offered before to the list in `game_dir`, just below the
+/// official server (last when the list doesn't have it), unless the list has its address.
+pub fn add_partner_servers(game_dir: &Path) -> std::io::Result<()> {
+    let marker = game_dir.join(PARTNER_MARKER);
+    let offered = match std::fs::read_to_string(&marker) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        // Can't tell what was offered: offer nothing rather than twice.
+        Err(_) => return Ok(()),
+    };
+    let was_offered = |a: &str| offered.lines().any(|l| address_key(l) == address_key(a));
+    let new: Vec<_> = PARTNER_SERVERS
+        .iter()
+        .filter(|(_, a)| !was_offered(a))
+        .collect();
+    if new.is_empty() {
+        return Ok(());
+    }
+    let file = game_dir.join("servers.dat");
+    let _guard = SAVING.lock();
+    // Each new partner goes below the one before it, the first below the official server.
+    let mut anchor = address_key(OFFICIAL_SERVER.1);
+    for (name, address) in &new {
+        if !servers::load(&file)
+            .iter()
+            .any(|s| address_key(&s.ip) == address_key(address))
+        {
+            servers::insert_after(&file, &ServerEntry::new(name, address), |ip| {
+                address_key(ip) == anchor
+            })?;
+            anchor = address_key(address);
+        }
+    }
+    let mut text = offered;
+    for (_, address) in &new {
+        text.push_str(address);
+        text.push('\n');
+    }
+    std::fs::write(marker, text)
 }
 
 /// Points the entries for an earlier official address at `address`, each
@@ -671,7 +725,7 @@ impl Screen {
                 let x = ((w - 308.0) / 2.0).floor();
                 let saved = selected.is_some_and(|i| i < servers.len());
                 let label = |key: &str, fallback: &str| crate::lang::get_or(key, fallback);
-                vec![
+                let mut buttons = vec![
                     b(
                         x,
                         h - 52.0,
@@ -728,7 +782,18 @@ impl Screen {
                         true,
                         46,
                     ),
-                ]
+                ];
+                if crate::net::older_servers_enabled() {
+                    buttons.push(b(
+                        w - 105.0,
+                        5.0,
+                        100.0,
+                        &label("horizon.multiplayer.horizon_via.title", "ViaHorizon"),
+                        true,
+                        61,
+                    ));
+                }
+                buttons
             }
             Self::Edit { address, packs, .. } => vec![
                 // ManageServerScreen's CycleButton, above Done.
@@ -780,24 +845,38 @@ impl Screen {
                     ),
                 ]
             }
-            Self::Direct { address } => vec![
-                b(
-                    half(w) - 100.0,
-                    quarter(h) + 96.0 + 12.0,
-                    200.0,
-                    &crate::lang::get_or("selectServer.select", "Join Server"),
-                    servers::parse_address(address).is_some(),
-                    52,
-                ),
-                b(
-                    half(w) - 100.0,
-                    quarter(h) + 120.0 + 12.0,
-                    200.0,
-                    &crate::lang::get_or("gui.cancel", "Cancel"),
-                    true,
-                    53,
-                ),
-            ],
+            Self::Versions(selector) => selector.buttons(w, h),
+            Self::Direct { address } => {
+                let mut buttons = vec![
+                    b(
+                        half(w) - 100.0,
+                        quarter(h) + 96.0 + 12.0,
+                        200.0,
+                        &crate::lang::get_or("selectServer.select", "Join Server"),
+                        servers::parse_address(address).is_some(),
+                        52,
+                    ),
+                    b(
+                        half(w) - 100.0,
+                        quarter(h) + 120.0 + 12.0,
+                        200.0,
+                        &crate::lang::get_or("gui.cancel", "Cancel"),
+                        true,
+                        53,
+                    ),
+                ];
+                if crate::net::older_servers_enabled() {
+                    buttons.push(b(
+                        w.ceil() - 105.0,
+                        5.0,
+                        100.0,
+                        &crate::lang::get_or("horizon.multiplayer.horizon_via.title", "ViaHorizon"),
+                        true,
+                        61,
+                    ));
+                }
+                buttons
+            }
             Self::Friend { code, .. } => vec![
                 b(
                     half(w) - 100.0,
@@ -885,6 +964,10 @@ impl Screen {
             Self::List { .. } => {
                 ScreenInfo::new("multiplayer", get("multiplayer.title", "Play Multiplayer"))
             }
+            Self::Versions(_) => ScreenInfo::new(
+                "protocol_selection",
+                get("horizon.multiplayer.horizon_via.title", "ViaHorizon"),
+            ),
             Self::Edit { index, .. } => ScreenInfo::new(
                 "multiplayer/edit",
                 if index.is_some() {
@@ -988,6 +1071,7 @@ impl Screen {
         focused_at: Instant,
         cursor: (f32, f32),
         hide_address: bool,
+        items: Option<&crate::item_render::ItemRenderer>,
     ) {
         let (w, h) = (batch.width, batch.height);
         let max = self.max_length();
@@ -999,6 +1083,9 @@ impl Screen {
             batch.text(atlas, text, centered_x(w, tw), y, color, true);
         };
         match self {
+            Self::Versions(selector) => {
+                selector.draw(atlas, batch, caret, focused_at, cursor, items);
+            }
             Self::List {
                 servers,
                 selected,
@@ -1012,6 +1099,11 @@ impl Screen {
                 // The header's StringWidget, centred in its 33 pixels.
                 let tw = HudBatch::text_width(atlas, &title);
                 let tx = ((w - tw.ceil()) / 2.0).floor();
+                let tx = if crate::net::older_servers_enabled() {
+                    tx.min(w - 113.0 - tw.ceil()).max(4.0)
+                } else {
+                    tx
+                };
                 batch.text(
                     atlas,
                     &title,
@@ -1444,7 +1536,26 @@ impl Screen {
         saves: &Path,
     ) -> Outcome {
         let (w, h) = size;
+        if let Self::Versions(selector) = self {
+            if id == Some(62) {
+                self.close_version_selector();
+            } else {
+                selector.click(id, x, y, size);
+            }
+            return Outcome::None;
+        }
         match (&mut *self, id) {
+            (Self::List { .. } | Self::Direct { .. }, Some(61))
+                if crate::net::older_servers_enabled() =>
+            {
+                let previous = std::mem::replace(
+                    self,
+                    Self::Direct {
+                        address: String::new(),
+                    },
+                );
+                *self = Self::Versions(version_select::Selector::new(previous));
+            }
             (
                 Self::List {
                     servers,
@@ -1736,6 +1847,10 @@ impl Screen {
         true
     }
     pub fn wheel(&mut self, delta: f32, cursor: (f32, f32), size: (f32, f32)) {
+        if let Self::Versions(selector) = self {
+            selector.wheel(delta, cursor, size);
+            return;
+        }
         if let Self::List {
             servers,
             lan,
@@ -1752,6 +1867,10 @@ impl Screen {
     }
     /// The pointer moved: a held scrollbar follows it.
     pub fn drag(&mut self, y: f32, size: (f32, f32)) {
+        if let Self::Versions(selector) = self {
+            selector.drag(y, size);
+            return;
+        }
         if let Self::List {
             servers,
             lan,
@@ -1769,6 +1888,9 @@ impl Screen {
         }
     }
     pub fn release(&mut self) {
+        if let Self::Versions(selector) = self {
+            selector.release();
+        }
         if let Self::List { scroll, .. } = self {
             scroll.release();
         }
@@ -1776,6 +1898,11 @@ impl Screen {
     /// The focused box, in GUI pixels: name at 66, address at 106
     /// (`ManageServerScreen`), direct address at 116, friend fields at 64 and 105.
     pub fn focused_box(&self, (w, _h): (f32, f32)) -> Option<[f32; 4]> {
+        if let Self::Versions(selector) = self {
+            return selector
+                .search_focused
+                .then(|| version_select::search_box(w));
+        }
         let y = match self {
             Self::Edit { focus: 0, .. } => 66.0,
             Self::Edit { focus: 1, .. } => 106.0,
@@ -1790,6 +1917,7 @@ impl Screen {
     }
     fn focused_field(&mut self) -> Option<&mut String> {
         match self {
+            Self::Versions(selector) if selector.search_focused => Some(&mut selector.query),
             Self::Edit {
                 name,
                 address,
@@ -1871,6 +1999,7 @@ impl Screen {
     /// The focused text field, its id and maximum length (copy and paste).
     pub fn focused_text(&mut self) -> Option<(crate::clipboard::FieldId, &mut String, usize)> {
         let id = match self {
+            Self::Versions(selector) if selector.search_focused => version_select::SEARCH_ID,
             Self::Edit { focus: 0, .. } => SERVER_NAME,
             Self::Edit { .. } => SERVER_ADDRESS,
             Self::Direct { .. } => SERVER_DIRECT,
@@ -1894,6 +2023,10 @@ impl Screen {
     /// round to the first field. `button` is the focused button, if any; a field
     /// has the focus (`focus` below 2) only while no button does.
     pub fn tab_dir(&mut self, reverse: bool, buttons: &[u8], button: &mut Option<u8>) {
+        if let Self::Versions(selector) = self {
+            selector.tab_dir(reverse, buttons, button);
+            return;
+        }
         let (Self::Edit { focus, .. } | Self::Friend { focus, .. }) = self else {
             return;
         };
@@ -1920,6 +2053,10 @@ impl Screen {
     pub fn escape(&mut self, saves: &Path) -> bool {
         match self {
             Self::List { .. } => true,
+            Self::Versions(_) => {
+                self.close_version_selector();
+                false
+            }
             // ConfirmScreen.keyPressed: Escape answers no.
             Self::ConfirmDelete { list, .. } => {
                 let list = std::mem::replace(
@@ -1935,6 +2072,32 @@ impl Screen {
                 *self = Self::list(saves);
                 false
             }
+        }
+    }
+
+    fn close_version_selector(&mut self) {
+        let Self::Versions(selector) = self else {
+            return;
+        };
+        let previous = std::mem::replace(
+            &mut *selector.previous,
+            Self::Direct {
+                address: String::new(),
+            },
+        );
+        *self = previous;
+    }
+
+    pub(crate) fn search_changed(&mut self) {
+        if let Self::Versions(selector) = self {
+            selector.search_changed();
+            crate::widgets::narrate_now();
+        }
+    }
+
+    pub(crate) fn blur_field(&mut self) {
+        if let Self::Versions(selector) = self {
+            selector.blur_field();
         }
     }
 }
@@ -1978,6 +2141,55 @@ pub fn wrap(text: &str, width: f32, atlas: &HudAtlas) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_picker_back_and_escape_keep_the_direct_address_and_enter_action() {
+        use crate::title::{Action, Mode, Title};
+        for escape in [false, true] {
+            let address = "example.invalid:25566";
+            let mut title = Title::new(PathBuf::from("unused/saves"), Path::new("unused"));
+            title.mode = Mode::Multiplayer(Screen::Versions(version_select::Selector::new(
+                Screen::Direct {
+                    address: address.into(),
+                },
+            )));
+            // The keyboard previously focused the selector's Back button.
+            title.focused_button = Some(62);
+            if escape {
+                title.escape();
+            } else {
+                title.click(35.0, 15.0, (427.0, 240.0));
+            }
+            assert!(matches!(
+                &title.mode,
+                Mode::Multiplayer(Screen::Direct { address: actual }) if actual == address
+            ));
+            assert_eq!(
+                title.confirm_key(),
+                Action::Connect {
+                    address: address.into(),
+                    lan: false
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn version_search_focus_can_be_left_without_changing_the_return_screen() {
+        use crate::title::{Mode, Title};
+        let mut title = Title::new(PathBuf::from("unused/saves"), Path::new("unused"));
+        let mut selector = version_select::Selector::new(Screen::Direct {
+            address: "example.invalid".into(),
+        });
+        selector.search_focused = true;
+        title.mode = Mode::Multiplayer(Screen::Versions(selector));
+        title.type_text("1.21.7");
+        assert_eq!(title.focused_field().unwrap().1, "1.21.7");
+        title.blur_field();
+        assert!(!title.has_caret_field());
+        title.escape();
+        assert_eq!(title.focused_field().unwrap().1, "example.invalid");
+    }
 
     #[test]
     fn servers_dat_is_beside_saves_or_in_the_player_dir() {
@@ -2115,8 +2327,14 @@ mod tests {
         let at = |screen: &Screen, w, h| -> Vec<(f32, f32)> {
             screen.buttons(w, h).iter().map(|b| (b.0, b.1)).collect()
         };
-        assert_eq!(at(&direct, 427.0, 334.0), [(113.0, 191.0), (113.0, 215.0)]);
-        assert_eq!(at(&direct, 320.0, 240.0), [(60.0, 168.0), (60.0, 192.0)]);
+        let mut large = vec![(113.0, 191.0), (113.0, 215.0)];
+        let mut small = vec![(60.0, 168.0), (60.0, 192.0)];
+        if crate::net::older_servers_enabled() {
+            large.push((322.0, 5.0));
+            small.push((215.0, 5.0));
+        }
+        assert_eq!(at(&direct, 427.0, 334.0), large);
+        assert_eq!(at(&direct, 320.0, 240.0), small);
         let friend = Screen::Friend {
             code: String::new(),
             relay: String::new(),
@@ -2311,6 +2529,53 @@ mod tests {
         servers::save(&file, &mine).unwrap();
         add_official_server(&dir).unwrap();
         assert_eq!(ips(), ["127.0.0.1:2", "example.org"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn partner_servers_are_offered_once_below_the_official_server() {
+        let dir = std::env::temp_dir().join(format!("horizon-mp-partner-{}", std::process::id()));
+        let official = OFFICIAL_SERVER.1;
+        let (name, partner) = PARTNER_SERVERS[0];
+        let file = dir.join("servers.dat");
+        let ips = || -> Vec<String> { servers::load(&file).into_iter().map(|s| s.ip).collect() };
+        let fresh = |list: &[ServerEntry]| {
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            if !list.is_empty() {
+                servers::save(&file, list).unwrap();
+            }
+        };
+        // A first start: the official server on top, the partner just below it.
+        fresh(&[ServerEntry::new("Mine", "127.0.0.1:2")]);
+        add_official_server(&dir).unwrap();
+        add_partner_servers(&dir).unwrap();
+        assert_eq!(ips(), [official, partner, "127.0.0.1:2"]);
+        assert_eq!(servers::load(&file)[1].name, name);
+        // Once only.
+        add_partner_servers(&dir).unwrap();
+        assert_eq!(ips(), [official, partner, "127.0.0.1:2"]);
+        // A player who already had the official server moved it down: the partner follows it.
+        fresh(&[
+            ServerEntry::new("Mine", "127.0.0.1:2"),
+            ServerEntry::new("SMP", official),
+            ServerEntry::new("Last", "example.org"),
+        ]);
+        add_partner_servers(&dir).unwrap();
+        assert_eq!(ips(), ["127.0.0.1:2", official, partner, "example.org"]);
+        // No official server: last. Already listed in another spelling: not duplicated.
+        fresh(&[ServerEntry::new("Mine", "127.0.0.1:2")]);
+        add_partner_servers(&dir).unwrap();
+        assert_eq!(ips(), ["127.0.0.1:2", partner]);
+        fresh(&[ServerEntry::new("ZA", "Afri-Network.co.za:25565")]);
+        add_partner_servers(&dir).unwrap();
+        assert_eq!(ips(), ["Afri-Network.co.za:25565"]);
+        // Deleted by the player: never back.
+        fresh(&[]);
+        add_partner_servers(&dir).unwrap();
+        servers::save(&file, &[]).unwrap();
+        add_partner_servers(&dir).unwrap();
+        assert!(ips().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

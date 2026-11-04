@@ -16,6 +16,8 @@ const UNIFORM: u64 = 2 * 64;
 /// What `gbuffers_hand` reads: the entity inputs, and the hand's projection from set 1.
 pub fn inputs() -> horizon_shaders::GbuffersInputs {
     let mut inputs = super::pack_entities::inputs();
+    // Hand programs declare currentRenderedItemId even when the source omits it.
+    inputs.item_id_declared = true;
     inputs.declarations.push_str(
         "layout(set = 1, binding = 1) uniform HzHand { mat4 hz_hand_projection; mat4 hz_hand_projection_inverse; };\n",
     );
@@ -45,10 +47,16 @@ pub struct PackHand {
     capacity: u32,
     /// Quads uploaded this frame.
     pub quads: u32,
+    draw_layout: wgpu::BindGroupLayout,
+    slots: wgpu::Buffer,
+    pub draw_group: wgpu::BindGroup,
+    stride: u32,
+    /// Vertex ranges and their dynamic draw-uniform offsets.
+    pub draws: Vec<(std::ops::Range<u32>, u32)>,
 }
 
 impl PackHand {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, draw_layout: &wgpu::BindGroupLayout) -> Self {
         let entry = |binding, ty| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::VERTEX,
@@ -74,6 +82,8 @@ impl PackHand {
         });
         let capacity = 256;
         let (vertices, group) = Self::vertex_buffer(device, &layout, &uniform, capacity);
+        let stride = device.limits().min_uniform_buffer_offset_alignment.max(32);
+        let (slots, draw_group) = Self::slot_buffer(device, draw_layout, stride * 4);
         Self {
             indices: super::pack_entities::quad_indices(device, capacity),
             layout,
@@ -82,7 +92,38 @@ impl PackHand {
             group,
             capacity,
             quads: 0,
+            draw_layout: draw_layout.clone(),
+            slots,
+            draw_group,
+            stride,
+            draws: Vec::new(),
         }
+    }
+
+    fn slot_buffer(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        size: u32,
+    ) -> (wgpu::Buffer, wgpu::BindGroup) {
+        let slots = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shader pack hand draw uniforms"),
+            size: u64::from(size),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Shader pack hand draw uniforms"),
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &slots,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(32),
+                }),
+            }],
+        });
+        (slots, group)
     }
 
     fn vertex_buffer(
@@ -122,8 +163,10 @@ impl PackHand {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         hand: &[Vertex],
+        spans: &[super::pack_draw::EntitySpan],
         projection: Mat4,
     ) {
+        self.draws.clear();
         self.quads = (hand.len() / 4) as u32;
         if self.quads == 0 {
             return;
@@ -137,6 +180,26 @@ impl PackHand {
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(hand));
         let matrices = [projection, projection.inverse()].map(|m| m.to_cols_array());
         queue.write_buffer(&self.uniform, 0, bytemuck::cast_slice(&matrices));
+        let ranges = item_ranges(hand.len(), spans);
+        let size = ranges.len() as u32 * self.stride;
+        if u64::from(size) > self.slots.size() {
+            (self.slots, self.draw_group) =
+                Self::slot_buffer(device, &self.draw_layout, size.next_power_of_two());
+        }
+        let mut contents = vec![0; size as usize];
+        for (index, (range, item_id)) in ranges.into_iter().enumerate() {
+            let offset = index as u32 * self.stride;
+            let bytes = super::pack_draw::encode(
+                horizon_shaders::render_stage("HAND_SOLID"),
+                0,
+                -1,
+                item_id,
+                [0.0; 4],
+            );
+            contents[offset as usize..offset as usize + bytes.len()].copy_from_slice(&bytes);
+            self.draws.push((range, offset));
+        }
+        queue.write_buffer(&self.slots, 0, &contents);
     }
 
     pub fn vertices(&self) -> wgpu::BufferSlice<'_> {
@@ -144,9 +207,80 @@ impl PackHand {
     }
 }
 
+fn item_ranges(
+    len: usize,
+    spans: &[super::pack_draw::EntitySpan],
+) -> Vec<(std::ops::Range<u32>, Option<i32>)> {
+    let mut ranges = Vec::new();
+    let first = spans
+        .first()
+        .map_or(len, |span| (span.start as usize).min(len));
+    if first > 0 {
+        ranges.push((0..first as u32, None));
+    }
+    for (span, range) in super::pack_entities::runs(len, spans) {
+        if !range.is_empty() {
+            ranges.push((range.start as u32..range.end as u32, span.item_id));
+        }
+    }
+    ranges
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_person_draws_keep_arms_and_both_items_distinct() {
+        use super::super::pack_draw::EntitySpan;
+        let spans = [
+            EntitySpan::default(),
+            EntitySpan {
+                start: 4,
+                item_id: Some(17),
+                ..Default::default()
+            },
+            EntitySpan {
+                start: 12,
+                ..Default::default()
+            },
+            EntitySpan {
+                start: 16,
+                item_id: Some(29),
+                ..Default::default()
+            },
+            EntitySpan {
+                start: 20,
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            item_ranges(24, &spans),
+            [
+                (0..4, None),
+                (4..12, Some(17)),
+                (12..16, None),
+                (16..20, Some(29)),
+                (20..24, None)
+            ]
+        );
+        assert_eq!(item_ranges(8, &[]), [(0..8, None)]);
+        assert!(item_ranges(0, &spans).is_empty());
+    }
+
+    #[test]
+    fn empty_item_draw_does_not_leak_its_id_into_the_next_hand() {
+        use super::super::pack_draw::EntitySpan;
+        let mut spans = vec![EntitySpan::default()];
+        let previous = EntitySpan::item(&mut spans, 4, 11);
+        EntitySpan::restore(&mut spans, 4, previous);
+        let previous = EntitySpan::item(&mut spans, 4, 22);
+        EntitySpan::restore(&mut spans, 8, previous);
+        assert_eq!(
+            item_ranges(12, &spans),
+            [(0..4, None), (4..8, Some(22)), (8..12, None)]
+        );
+    }
 
     /// The hand's window depth lies within `MC_HAND_DEPTH` of the middle (packs tell the hand
     /// apart by it), and x, y match the plain projection.

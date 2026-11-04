@@ -92,7 +92,7 @@ impl<T> Resident<T> {
         self.items.iter_mut().map(|(_, v)| v)
     }
     /// Every section's key, value and bounds.
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, debug_assertions))]
     pub fn iter(&self) -> impl Iterator<Item = (SectionKey, &T, Option<[Vec3; 2]>)> {
         let items = self.items.iter().zip(&self.bounds);
         items.map(|((key, value), bounds)| (*key, value, *bounds))
@@ -193,6 +193,12 @@ impl<T> Resident<T> {
         }
         column.low = column.low.min(key.1);
         column.high = column.high.max(key.1);
+    }
+    /// Marks or unmarks the section at `key`, if it is resident.
+    pub fn set_marked(&mut self, key: SectionKey, marked: bool) {
+        if let Some(&slot) = self.slots.get(&key) {
+            self.mark_slot(slot, marked);
+        }
     }
     /// Marks or unmarks the section in `slot`, in its column's list too.
     fn mark_slot(&mut self, slot: u32, marked: bool) {
@@ -320,6 +326,21 @@ pub(super) fn camera_column(camera: DVec3) -> (i32, i32) {
         (camera.x.floor() as i32) >> 4,
         (camera.z.floor() as i32) >> 4,
     )
+}
+
+/// `SectionOcclusionGraph.getRelativeFrom` limits the main view vertically as
+/// well as horizontally. `initializeQueueForFullUpdate` still seeds the nearest
+/// boundary layer when the camera lies outside the level. Section Y is relative
+/// to the level's bottom; shadow and distant-terrain views choose their own policy.
+pub(super) fn section_y_in_view_distance(
+    y: i32,
+    camera_y: i32,
+    radius: i32,
+    sections: i32,
+) -> bool {
+    (i64::from(y) - i64::from(camera_y)).abs() <= i64::from(radius)
+        || (camera_y < 0 && y == 0)
+        || (camera_y >= sections && y == sections - 1)
 }
 
 /// The world AABB (min, max) of a section from its origin and optional tight bounds.
@@ -494,6 +515,72 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     #[test]
+    fn main_view_vertical_slice_applies_without_a_cave_graph() {
+        let mut resident = Resident::default();
+        resident.set_min_y(-64);
+        for y in [0, 1, 2, 14, 22, 23] {
+            resident.insert_marked((0, y, 0), (), None, true);
+        }
+        let all = Frustum {
+            planes: [glam::Vec4::W; 6],
+        };
+        // The flat floor at -60 is in relative section 0, fourteen sections
+        // below the eye at 161.62. Exact distance 12 is still drawn.
+        for (eye_y, radius, expected) in [
+            (161.62, 12, &[2, 14, 22, 23][..]),
+            (161.62, 14, &[0, 1, 2, 14, 22, 23][..]),
+            (1000.0, 12, &[23][..]),
+            (-1000.0, 12, &[0][..]),
+            (-63.5, 12, &[0, 1, 2][..]),
+        ] {
+            let camera = DVec3::new(0.5, eye_y, 0.5);
+            let camera_y = super::super::camera_section(camera, -64).1;
+            for marked_only in [false, true] {
+                let mut visible = Vec::new();
+                resident.walk(
+                    camera,
+                    radius,
+                    &all,
+                    |key| section_y_in_view_distance(key.1, camera_y, radius, 24),
+                    |_, _| false,
+                    marked_only,
+                    &mut visible,
+                );
+                let mut ys: Vec<i32> = visible.iter().map(|section| section.key.1).collect();
+                ys.sort_unstable();
+                assert_eq!(
+                    ys, expected,
+                    "eye {eye_y}, radius {radius}, marked {marked_only}"
+                );
+            }
+        }
+        // Shadow views supply their own reach predicate, and LOD cutouts past
+        // the near distance still use `beyond` rather than the near-view slice.
+        let mut shadow = Vec::new();
+        resident.visible(
+            DVec3::new(0.5, 161.62, 0.5),
+            12,
+            &all,
+            |_| true,
+            |_, _| false,
+            &mut shadow,
+        );
+        assert_eq!(shadow.len(), 6);
+        resident.insert((20, 0, 0), ());
+        let mut distant = Vec::new();
+        resident.walk(
+            DVec3::new(0.5, 161.62, 0.5),
+            12,
+            &all,
+            |key| section_y_in_view_distance(key.1, 14, 12, 24),
+            |x, _| x == 20,
+            false,
+            &mut distant,
+        );
+        assert!(distant.iter().any(|section| section.key == (20, 0, 0)));
+    }
+
+    #[test]
     fn column_walk_finds_exactly_the_sections_in_view() {
         let mut r = Resident::default();
         for x in -12i32..=12 {
@@ -657,7 +744,8 @@ mod tests {
             (!value.is_multiple_of(3)).then(|| [Vec3::splat((value % 5) as f32), Vec3::splat(16.0)])
         };
         // A deterministic mix of inserts, replacements and removals, marked at
-        // random: a replacement can mark or unmark its section.
+        // random: a replacement can mark or unmark its section, and so can a
+        // mark set alone (`set_marked`), which leaves a key not resident alone.
         let mut seed = 0x2545_f491_u32;
         for step in 0..4000u32 {
             seed ^= seed << 13;
@@ -694,6 +782,12 @@ mod tests {
                 assert_eq!(removed, expected);
             } else if (seed >> 12).is_multiple_of(3) {
                 assert_eq!(r.remove(key), model.remove(&key).map(|(value, _)| value));
+            } else if (seed >> 12).is_multiple_of(5) {
+                let marked = (seed >> 20).is_multiple_of(2);
+                r.set_marked(key, marked);
+                if let Some(held) = model.get_mut(&key) {
+                    held.1 = marked;
+                }
             } else {
                 let marked = (seed >> 20).is_multiple_of(2);
                 r.insert_marked(key, step, bounds(step), marked);

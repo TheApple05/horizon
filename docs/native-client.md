@@ -111,6 +111,64 @@ mute a test run's stream in the mixer: PipeWire remembers the mute for every
 later `horizon-client`. The launcher starts the game as "Horizon" for that
 reason.
 
+### Experimental older servers
+
+The native Rust adapter recognizes 26.2, 26.1.x, 1.21.11, 1.21.9/1.21.10,
+1.21.7/1.21.8, 1.21.6, 1.21.5, 1.21.4, 1.21.2/1.21.3, 1.21/1.21.1 and 1.20.5/1.20.6. It is off by default while compatibility is incomplete. Set
+`HORIZON_OLDER_SERVERS=1` before starting the game; the server's status ping selects
+the adapter. The client still needs its prepared **26.3** resources.
+
+```sh
+HORIZON_OLDER_SERVERS=1 cargo run --profile fast -p horizon-client -- --server 127.0.0.1:25565
+```
+
+In PowerShell, set `$env:HORIZON_OLDER_SERVERS = '1'`, then run the same Cargo
+command without the environment assignment at its start.
+
+This does not load Fabric JARs or emulate every older version's movement and
+combat. Older item components still have gaps; a recognized protocol is not a
+promise of complete compatibility. The 1.21.6 and 1.21.7/1.21.8 adapters use vanilla
+packet layouts shared by these releases, with separate item/sound mappings for
+1.21.6. The 1.21.5 adapter also removes vanilla's chunk-buffer padding and converts crouch/action commands,
+hanging-entity metadata and the pre-1.21.6 attribute-modifier/equippable layouts.
+The 1.21.4 bridge converts its older chunks, tooltip flags, nested stacks, chat,
+team rules and entity metadata. Old inventory clicks use the server's authoritative
+slot/cursor resynchronization. Smithing previews follow the server's synced trim
+registry; inline 1.21.4 trim holders and templates outside the known vanilla item
+set remain unsupported.
+The 1.21.2/1.21.3 bridge also handles particle flags and client-chosen trail lifetimes,
+vehicle movement, tab-list hats, integer custom-model data, old creaking-heart states
+and the transient creaking type. Custom-model data uses the first float when sent
+back; integers beyond exact float precision can lose precision. Server-delegated
+block/entity picking is not supported on 1.20.5 through 1.21.3, whose old pick packet
+requires a client inventory index instead of a world target.
+The 1.21/1.21.1 bridge converts older recipe declarations and book updates, food
+consumption data, potions, instruments, teleports, inventory windows and settings.
+Boat wood variants become their corresponding modern entity types, retaining
+movement, metadata and passengers when recreated. Old explosions preserve their
+radius, destroyed-block updates and knockback. Custom recipe serializers and
+consumable effects without an old representation remain unsupported.
+The 1.20.5/1.20.6 bridge also converts UUID-based attribute modifiers, food without
+a remainder field, horse inventory sizes, projectile acceleration and item-use
+packets without rotation. Static enchantment and painting names are supplied in
+their original wire-id order; their definitions use the client's prepared resources.
+Old modifier names become vanilla's canonical identifiers and cannot retain arbitrary
+original display names on write-back. New identifiers without a known old UUID
+receive a stable generated UUID, so their original identifier is lost on a round trip.
+The old three-component projectile acceleration is represented by its
+magnitude; a custom direction independent of velocity has no scalar representation.
+Wolf registry references on 1.21 through 1.21.4 are normalized past their older
+holder encoding; inline wolf definitions on those versions remain unsupported.
+Online-mode login and complete interactive playthroughs on these versions
+have not been validated. Earlier Java releases, Classic/Alpha/Beta,
+April Fools and Bedrock are outside the implemented adapter set.
+
+For a protocol-only development check, append `--server-protocol 772` to
+`cargo run -p horizon-protocol --example protocol_probe -- 127.0.0.1:25565 20`.
+The probe fails if it encounters packet or chunk decode errors.
+Use `--server-protocol 766` for 1.20.5/1.20.6, `767` for 1.21/1.21.1, `768` for 1.21.2/1.21.3, `769` for 1.21.4, `770` for 1.21.5, or `771` for 1.21.6;
+1.21.7 and 1.21.8 both use `772`.
+
 ### Agent control (`horizon-ctl` and MCP)
 
 AI agents and scripts play Horizon through `horizon-ctl`, a command line that
@@ -242,39 +300,6 @@ constant speed and replies with the same summary as `bench` (avg/1%-low FPS and
 p50/p95/p99/max frame times), plus CPU and GPU time per frame; [the graphics
 benchmark](graphics.md#benchmark) is built on it. Frame times include waits for
 presentation, so `bench` reports what is on screen.
-
-### RAM limit
-
-`HORIZON_MEMORY_LIMIT_MB` (the launcher sets it when the player picks a value; there is none by default)
-and `/ramlimit`, `/ramlimit <MB>`, `/ramlimit off` limit the RAM the game holds; the command lasts until
-the game closes and works on any server, as the window answers it. Once a second the game compares what
-it holds in RAM with the limit and, past nine tenths of it, turns far terrain off and then lowers the
-render distance in use, never the saved option, until it fits; both come back when there is room. This
-is the same on Windows, Linux and macOS: nothing asks the system to page the game out to meet the limit.
-The game ends with a crash report only when it can't run under the limit: 20 seconds over it with nothing
-left to give up.
-
-**`HORIZON_MEMORY_HARD_MB` / `/ramlimit hard <MB>`** is the other contract, the one `-Xmx` gives
-Java: a budget for the memory the process commits, not only for the part that stays in RAM. Nothing is
-paged out to meet it. Once a second the game compares what the process committed with the budget and,
-over nine tenths of it, gives up far terrain and then render distance the way it does under a low RAM
-limit, until it fits; when there is room again, both come back. Below a budget the game can reach even
-at its lowest distance, it ends after twenty seconds with a crash report naming what it held and the
-budget, instead of sitting in the page file.
-
-The allocator holds the same line: it counts the bytes the game asks for, a free returns them at once,
-and a request past the ceiling fails rather than being served, so a sudden burst cannot pass the budget
-in the second before the next look. That failure ends the game with a message naming the ceiling.
-
-Set it at or below the RAM limit; alone it also becomes the RAM limit. What it counts is the whole
-process: on a clean launch this build commits 1.1 to 1.2 GB before a world is open (the renderer and
-the game's resources), so a budget under about 1.4 GB leaves too little to run, exactly as `-Xmx` too
-low throws `OutOfMemoryError`.
-
-What "committed" means depends on the system. On Windows it is the process's commit charge, the
-figure Task Manager shows, the graphics driver's pages included. On Linux and macOS there is no such
-figure: it is what the game's allocator (mimalloc) committed, so the driver's and the GPU's own memory
-are outside the budget there.
 
 ### Discord Rich Presence
 

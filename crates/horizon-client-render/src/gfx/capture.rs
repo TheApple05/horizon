@@ -553,6 +553,7 @@ impl Scene {
                 .stars
                 .map(|(rotation, brightness)| (Mat4::from_cols_array(&rotation), brightness)),
             hand: &[],
+            hand_spans: &[],
             hand_fov_degrees: f.hand_fov_degrees,
             screen: &[],
             pack: Default::default(),

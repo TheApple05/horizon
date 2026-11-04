@@ -56,6 +56,60 @@ pub struct LightTables {
     block_masks: Vec<u8>,
 }
 impl LightTables {
+    /// Derive connection-local light properties for a legacy wire registry.
+    ///
+    /// Tuples contain `(current_state_id, raw_legacy_opacity, legacy_emission)`.
+    /// Exact duplicate tuples are accepted; conflicting values for one state,
+    /// unknown current states and emissions above 15 reject the whole batch.
+    /// Every override is validated before any derived table is allocated.
+    ///
+    /// Legacy light checks treat an opaque emitting block as opacity 1. Their
+    /// light propagation has no modern per-face shape occlusion. States absent
+    /// from `overrides` retain their existing properties. The caller must supply
+    /// the complete canonical, contextual and neighbour-derived state mapping
+    /// for its connection; this method does not infer missing legacy states.
+    /// Received chunk light remains authoritative and is not changed here.
+    pub fn with_legacy_properties(&self, overrides: &[(u32, u8, u8)]) -> crate::Result<Self> {
+        let mut validated = HashMap::with_capacity(overrides.len());
+        for &(id, opacity, emission) in overrides {
+            if self.cells.get(id as usize).is_none() {
+                return Err(format!("legacy light override has unknown state {id}").into());
+            }
+            if emission > 15 {
+                return Err(
+                    format!("legacy light override has invalid emission {emission}").into(),
+                );
+            }
+            if let Some(previous) = validated.insert(id, (opacity, emission))
+                && previous != (opacity, emission)
+            {
+                return Err(format!("legacy light overrides conflict for state {id}").into());
+            }
+        }
+        let mut derived = Self {
+            cells: self.cells.clone(),
+            occludes: self.occludes.clone(),
+            faces: self.faces,
+            types: 0,
+            info: Vec::new(),
+            block_masks: Vec::new(),
+        };
+        for (id, (opacity, emission)) in validated {
+            derived.cells[id as usize] = Cell {
+                dampening: if opacity >= 15 && emission > 0 {
+                    1
+                } else {
+                    opacity.min(15)
+                },
+                emission,
+                shaped: false,
+                faces: [EMPTY; 6],
+            };
+        }
+        derived.rebuild_cache();
+        Ok(derived)
+    }
+
     /// Dampening and emission only: every occlusion face is empty.
     pub fn new(facts: &BlockFacts) -> Self {
         let mut tables = Self {
@@ -1265,6 +1319,242 @@ mod tests {
     }
     fn block(world: &HashMap<(i32, i32), Arc<Chunk>>, x: i32, y: i32, z: i32) -> u8 {
         world[&(x >> 4, z >> 4)].light(x & 15, y, z & 15) & 15
+    }
+
+    // Independent scene construction for the connection-local property tests.
+    // Every column is lit from actual blocks with the selected table; no
+    // expected light values are written into the scene.
+    fn world_with_light_tables(
+        tables: &LightTables,
+        edit: impl Fn(&mut Chunk),
+    ) -> HashMap<(i32, i32), Arc<Chunk>> {
+        let layout = ColumnLayout::VANILLA;
+        let mut chunks = HashMap::new();
+        for z in -1..=1 {
+            for x in -1..=1 {
+                let mut chunk = Chunk::with_layout(x, z, layout);
+                for y in layout.min_y()..0 {
+                    for i in 0..256 {
+                        chunk.set(i & 15, y, i >> 4, STONE);
+                    }
+                }
+                if (x, z) == (0, 0) {
+                    edit(&mut chunk);
+                }
+                chunks.insert((x, z), Arc::new(chunk));
+            }
+        }
+        let lit: Vec<_> = chunks
+            .keys()
+            .map(|&(x, z)| {
+                let region: [[Option<&Chunk>; 3]; 3] = std::array::from_fn(|dz| {
+                    std::array::from_fn(|dx| {
+                        chunks
+                            .get(&(x + dx as i32 - 1, z + dz as i32 - 1))
+                            .map(|chunk| &**chunk)
+                    })
+                });
+                let mut chunk = (**chunks.get(&(x, z)).unwrap()).clone();
+                apply_lighting(&mut chunk, light_chunk(&region, tables, true));
+                chunk.lit = true;
+                ((x, z), Arc::new(chunk))
+            })
+            .collect();
+        lit.into_iter().collect()
+    }
+
+    fn light_table_fingerprint(tables: &LightTables) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for cell in &tables.cells {
+            bytes.extend([cell.dampening, cell.emission, u8::from(cell.shaped)]);
+            for face in cell.faces {
+                bytes.extend(face.to_le_bytes());
+            }
+        }
+        bytes.extend(tables.occludes.iter().map(|&value| u8::from(value)));
+        bytes.extend(tables.faces.to_le_bytes());
+        bytes.extend(tables.types.to_le_bytes());
+        for info in &tables.info {
+            bytes.extend(info.to_le_bytes());
+        }
+        bytes.extend(&tables.block_masks);
+        bytes
+    }
+
+    #[test]
+    fn legacy_properties_derive_independent_tables_and_keep_unmapped_states() {
+        let modern = tables();
+        let before = light_table_fingerprint(&modern);
+        let legacy = modern
+            .with_legacy_properties(&[(SLAB, 255, 0), (SLAB, 255, 0)])
+            .unwrap();
+        assert_eq!(legacy.dampening(SLAB), 15);
+        assert!(!legacy.cells[SLAB as usize].shaped);
+        assert_eq!(legacy.cells[SLAB as usize].faces, [EMPTY; 6]);
+        assert!(!legacy.blocked(SLAB as usize, AIR as usize, Direction::Down as usize));
+        assert!(modern.blocked(SLAB as usize, AIR as usize, Direction::Down as usize));
+        assert_eq!(legacy.emission(TORCH), modern.emission(TORCH));
+        assert_eq!(legacy.dampening(TORCH), modern.dampening(TORCH));
+        assert_eq!(
+            legacy.cells[STONE as usize].faces,
+            modern.cells[STONE as usize].faces
+        );
+        assert_eq!(light_table_fingerprint(&modern), before);
+        assert_ne!(legacy.cells.as_ptr(), modern.cells.as_ptr());
+        assert_ne!(legacy.occludes.as_ptr(), modern.occludes.as_ptr());
+        let unchanged = modern.with_legacy_properties(&[]).unwrap();
+        assert_eq!(light_table_fingerprint(&unchanged), before);
+    }
+
+    #[test]
+    fn legacy_properties_reject_invalid_batches_and_conflicts_atomically() {
+        let modern = tables();
+        let before = light_table_fingerprint(&modern);
+        for overrides in [
+            vec![(SLAB, 255, 0), (u32::MAX, 0, 0)],
+            vec![(SLAB, 255, 0), (TORCH, 0, 16)],
+            vec![(SLAB, 255, 0), (SLAB, 0, 0)],
+            // Conflicts are about the supplied facts, even if clamping would
+            // happen to produce the same effective opacity.
+            vec![(SLAB, 255, 0), (SLAB, 15, 0)],
+        ] {
+            assert!(modern.with_legacy_properties(&overrides).is_err());
+            assert_eq!(light_table_fingerprint(&modern), before);
+        }
+    }
+
+    #[test]
+    fn legacy_slab_uses_old_opacity_instead_of_the_modern_open_top() {
+        fn roof(chunk: &mut Chunk) {
+            for x in 4..13 {
+                for z in 4..13 {
+                    chunk.set(x, 3, z, SLAB);
+                    for y in 0..3 {
+                        let wall = x == 4 || x == 12 || z == 4 || z == 12;
+                        chunk.set(x, y, z, if wall { STONE } else { AIR });
+                    }
+                }
+            }
+        }
+        let modern = tables();
+        let legacy = modern.with_legacy_properties(&[(SLAB, 255, 0)]).unwrap();
+        let current = world_with_light_tables(&modern, roof);
+        let old = world_with_light_tables(&legacy, roof);
+        assert_eq!(sky(&current, 8, 3, 8), 15, "modern positive control");
+        assert_eq!(sky(&old, 8, 3, 8), 0, "official47 slab opacity is 255");
+        assert_eq!(block(&old, 8, 3, 8), 0);
+        assert_eq!(sky(&old, 8, 4, 8), 15, "open sky above the slab");
+        let mut incremental = world_with_light_tables(&legacy, |_| {});
+        Arc::make_mut(incremental.get_mut(&(0, 0)).unwrap()).set(8, 3, 8, SLAB);
+        relight(
+            &mut incremental,
+            &legacy,
+            true,
+            &[(8, 3, 8)],
+            false,
+            &mut LightChanges::default(),
+        );
+        assert_eq!(sky(&incremental, 8, 3, 8), 0);
+        assert_eq!(sky(&incremental, 8, 4, 8), 15);
+        assert_eq!(modern.dampening(SLAB), 0, "modern table stayed unchanged");
+    }
+
+    const LEGACY_GLOWSTONE: u32 = 4;
+    const LEGACY_WATER: u32 = 5;
+
+    fn modern_tables_with_legacy_test_states() -> LightTables {
+        let mut tables = tables();
+        tables.cells.push(Cell {
+            dampening: 15,
+            emission: 15,
+            shaped: false,
+            faces: [EMPTY; 6],
+        });
+        tables.cells.push(Cell {
+            dampening: 3,
+            emission: 0,
+            shaped: false,
+            faces: [EMPTY; 6],
+        });
+        tables.rebuild_cache();
+        tables
+    }
+
+    #[test]
+    fn legacy_emitting_opaque_block_matches_dynamic_sky_and_block_light() {
+        let modern = modern_tables_with_legacy_test_states();
+        let legacy = modern
+            .with_legacy_properties(&[(LEGACY_GLOWSTONE, 255, 15)])
+            .unwrap();
+        let scene = |chunk: &mut Chunk| {
+            chunk.set(8, 4, 8, LEGACY_GLOWSTONE);
+        };
+        let current = world_with_light_tables(&modern, scene);
+        let fixed = world_with_light_tables(&legacy, scene);
+        assert_eq!(sky(&current, 8, 4, 8), 0, "modern positive control");
+        assert_eq!(sky(&fixed, 8, 4, 8), 14, "official47 post-checkLight sky");
+        assert_eq!(block(&fixed, 8, 4, 8), 15);
+        assert_eq!(block(&fixed, 9, 4, 8), 14);
+        assert_eq!(sky(&fixed, 8, 5, 8), 15);
+        assert_eq!(legacy.dampening(LEGACY_GLOWSTONE), 1);
+        assert_eq!(modern.dampening(LEGACY_GLOWSTONE), 15);
+
+        let mut incremental = world_with_light_tables(&legacy, |_| {});
+        Arc::make_mut(incremental.get_mut(&(0, 0)).unwrap()).set(8, 4, 8, LEGACY_GLOWSTONE);
+        relight(
+            &mut incremental,
+            &legacy,
+            true,
+            &[(8, 4, 8)],
+            false,
+            &mut LightChanges::default(),
+        );
+        for y in 0..9 {
+            for z in 4..13 {
+                for x in 4..13 {
+                    assert_eq!(sky(&incremental, x, y, z), sky(&fixed, x, y, z));
+                    assert_eq!(block(&incremental, x, y, z), block(&fixed, x, y, z));
+                }
+            }
+        }
+        Arc::make_mut(incremental.get_mut(&(0, 0)).unwrap()).set(8, 4, 8, AIR);
+        relight(
+            &mut incremental,
+            &legacy,
+            true,
+            &[(8, 4, 8)],
+            false,
+            &mut LightChanges::default(),
+        );
+        assert_eq!(sky(&incremental, 8, 4, 8), 15);
+        assert_eq!(block(&incremental, 8, 4, 8), 0);
+        assert_eq!(block(&incremental, 9, 4, 8), 0);
+    }
+
+    #[test]
+    fn legacy_water_keeps_three_units_of_dampening() {
+        let modern = modern_tables_with_legacy_test_states();
+        let legacy = modern
+            .with_legacy_properties(&[(LEGACY_WATER, 3, 0)])
+            .unwrap();
+        let fixed = world_with_light_tables(&legacy, |chunk| {
+            chunk.set(8, 4, 8, LEGACY_WATER);
+        });
+        assert_eq!(legacy.dampening(LEGACY_WATER), 3);
+        assert_eq!(sky(&fixed, 8, 4, 8), 12, "official47 post-checkLight water");
+        assert_eq!(block(&fixed, 8, 4, 8), 0);
+        let mut incremental = world_with_light_tables(&legacy, |_| {});
+        Arc::make_mut(incremental.get_mut(&(0, 0)).unwrap()).set(8, 4, 8, LEGACY_WATER);
+        relight(
+            &mut incremental,
+            &legacy,
+            true,
+            &[(8, 4, 8)],
+            false,
+            &mut LightChanges::default(),
+        );
+        assert_eq!(sky(&incremental, 8, 4, 8), 12);
+        assert_eq!(block(&incremental, 8, 4, 8), 0);
     }
 
     #[test]
