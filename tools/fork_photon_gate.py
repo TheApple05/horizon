@@ -34,7 +34,8 @@ def main():
     result = subprocess.run(command, env=env, timeout=1800,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     def sha(path):
-        return hashlib.file_digest(path.open("rb"), "sha256").hexdigest()
+        with path.open("rb") as source:
+            return hashlib.file_digest(source, "sha256").hexdigest()
     reports = list((output / "captures").glob("runtime-*/report.json"))
     passed = result.returncode == 0 and len(reports) == 1 and json.loads(reports[0].read_text())["ok"]
     proof = {"passed": passed, "profile": args.profile, "game_sha256": sha(game),
