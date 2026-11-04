@@ -363,7 +363,7 @@ impl GeneratorData {
         dir: &Path,
         registry: &'static BlockRegistry,
         ov: &WorldgenOverrides,
-    ) -> Result<Arc<Self>, GeneratorError> {
+    ) -> Result<Arc<GeneratorData>, GeneratorError> {
         let mut warnings = Vec::new();
         let flags: Vec<(bool, bool)> =
             serde_json::from_str(&fs::read_to_string(dir.join("block_flags.json"))?)?;
