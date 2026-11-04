@@ -44,6 +44,10 @@ def main():
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
+    # Keep this regression focused on the custom selector, using a fresh local
+    # options file instead of inheriting any real player's onboarding state.
+    (output / "options.txt").write_text(
+        "onboardAccessibility:false\nskipMultiplayerWarning:true\nlang:en_us\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith("HORIZON_")}
     for key in ("HORIZON_HOME", "HORIZON_LAUNCHER_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME",
                 "HORIZON_LAUNCHER_TRASH", "HORIZON_LAUNCHER_CLIPBOARD", "HORIZON_LAUNCHER_DESKTOP"):
@@ -61,7 +65,7 @@ def main():
         response = subprocess.run([str(control_tool), "--socket", str(control), "--timeout", "10", *command],
                                   cwd=output, env=env, capture_output=True, text=True, timeout=20, **flags)
         if response.returncode:
-            raise RuntimeError("Control command failed: " + " ".join(command) + "\n" + response.stderr)
+            raise RuntimeError("Control command failed: " + " ".join(command) + "\n" + response.stdout + response.stderr)
         return json.loads(response.stdout)
 
     def wait_for(predicate, timeout=90):
@@ -87,6 +91,8 @@ def main():
                                   cwd=output, env=env, stdout=stdout, stderr=stderr, **flags)
         try:
             wait_for(lambda: control.exists() and ctl("state").get("screen") == "title")
+            wait_for(lambda: any(w.get("label") == "Multiplayer" and w.get("enabled")
+                                 for w in ctl("ui")["widgets"]))
             ctl("click-button", "Multiplayer")
             for label, query, expected in (("26.3", "26.3", 777), ("1.21.4", "Garden", 769)):
                 widgets = ctl("ui")["widgets"]
