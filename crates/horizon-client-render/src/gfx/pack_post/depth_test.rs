@@ -197,6 +197,121 @@ fn all_pixels(pixels: &[[u8; 4]], expected: [u8; 4], name: &str) {
     assert_eq!(wrong, 0, "{name}: independent expected pixels {expected:?}");
 }
 
+#[test]
+fn weather_draws_color_without_writing_depth_and_stays_occluded() {
+    weather_depth_case(None);
+}
+
+#[test]
+fn weather_explicit_false_preserves_depth_and_stays_occluded() {
+    weather_depth_case(Some(false));
+}
+
+#[test]
+fn weather_explicit_true_changes_only_depth0_and_stays_occluded() {
+    weather_depth_case(Some(true));
+}
+
+/// The final program reads actual weather color and all three depth buffers.
+/// Default/false preserves opaque depth; true writes depth0 but no snapshots.
+fn weather_depth_case(rain_depth: Option<bool>) {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("DEPTH_FIXTURE_NO_ADAPTER");
+        return;
+    };
+    let color = gpu.texture(T::Rgba8Unorm);
+    let depth = gpu.texture(T::Depth32Float);
+    // Reverse-Z .25 becomes GL window depth .75 in the compatibility target.
+    gpu.clear(&color, &depth, 0.25);
+    let property = rain_depth.map_or(String::new(), |value| format!("rain.depth={value}\n"));
+    let files = vec![
+        ("shaders.properties".into(), format!("{property}blend.gbuffers_weather=off\n")),
+        ("gbuffers_weather.vsh".into(), "#version 120\nvoid main(){gl_Position=gl_Vertex;}".into()),
+        ("gbuffers_weather.fsh".into(), "#version 120\n/* RENDERTARGETS:13 */\nvoid main(){gl_FragColor=vec4(1.0,0.0,0.0,1.0);}".into()),
+        ("final.vsh".into(), VERTEX.into()),
+        ("final.fsh".into(), "#version 120\nvarying vec2 uv;uniform sampler2D depthtex0;uniform sampler2D depthtex1;uniform sampler2D depthtex2;uniform sampler2D colortex13;void main(){gl_FragColor=vec4(texture2D(depthtex0,uv).r,texture2D(colortex13,uv).r,texture2D(depthtex1,uv).r,texture2D(depthtex2,uv).r);}".into()),
+    ];
+    let mut post = gpu.load(
+        files,
+        World {
+            atlas: None,
+            lightmap: color.clone(),
+            terrain: None,
+            block_ids: &[],
+            celestial: None,
+            gui_size: SIZE,
+            clouds: None,
+            weather: true,
+            hand: false,
+        },
+        horizon_shaders::GameInputs {
+            weather: Some(crate::gfx::pack_weather::inputs()),
+            ..Default::default()
+        },
+    );
+    assert!(post.has_weather(), "{:?}", post.notes);
+    let positions = [
+        // Left half is in front of the opaque input: GL depth .25.
+        [-1.0, -1.0, -0.5],
+        [0.0, -1.0, -0.5],
+        [0.0, 1.0, -0.5],
+        [-1.0, 1.0, -0.5],
+        // Right half is behind it: GL depth .9, so no weather color survives.
+        [0.0, -1.0, 0.8],
+        [1.0, -1.0, 0.8],
+        [1.0, 1.0, 0.8],
+        [0.0, 1.0, 0.8],
+    ];
+    let vertices = positions.map(|pos| crate::gfx::Vertex {
+        pos,
+        color: u32::MAX,
+        ..bytemuck::Zeroable::zeroed()
+    });
+    let buffer = gpu
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Independent front and occluded weather quads"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+    let indices = crate::gfx::Renderer::quad_indices(&gpu.device, 2);
+    post.set_weather(Some(Weather {
+        vertices: buffer,
+        indices,
+        quads: [0..2, 2..2],
+        sprites: [None, None],
+        generation: 0,
+    }));
+    let hud = HudBatch::new(SIZE);
+    let actual = gpu.render(
+        &mut post,
+        &color,
+        &depth,
+        &fixture_frame(&hud),
+        &mut |_, _, _, _| {},
+    );
+    for (index, pixel) in actual.iter().enumerate() {
+        let expected = if index % (SIZE[0] as usize) < SIZE[0] as usize / 2 {
+            [
+                if rain_depth == Some(true) {
+                    64u8
+                } else {
+                    191u8
+                },
+                255,
+                191,
+                191,
+            ]
+        } else {
+            [191u8, 0, 191, 191]
+        };
+        assert!(
+            pixel.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
+            "pixel {index}: actual {pixel:?}, expected {expected:?}"
+        );
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stage {
     Fragment,
@@ -617,6 +732,7 @@ fn fixture_frame(hud: &HudBatch) -> Frame<'_> {
         celestial: &[],
         stars: None,
         hand: &[],
+        hand_spans: &[],
         hand_fov_degrees: 70.0,
         screen: &[],
         pack: Default::default(),

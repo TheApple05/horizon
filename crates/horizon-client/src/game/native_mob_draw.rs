@@ -190,7 +190,7 @@ impl Game<'_> {
         let keep = hook(&render, &mut draw);
         *out = draw.into_vertices();
         if !keep {
-            out.truncate(start);
+            self.truncate_entity_vertices(out, start);
         }
         keep
     }

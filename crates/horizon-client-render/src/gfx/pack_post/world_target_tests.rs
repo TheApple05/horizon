@@ -351,6 +351,7 @@ fn frame(hud: &HudBatch) -> Frame<'_> {
         celestial: &[],
         stars: None,
         hand: &[],
+        hand_spans: &[],
         hand_fov_degrees: 70.0,
         screen: &[],
         pack: Default::default(),

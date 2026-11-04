@@ -90,11 +90,12 @@ pub struct ComputeProgram {
 }
 
 /// The uniforms a gbuffers program reads per draw (5.3's "D"), in a block of their own
-/// (`HzDraw`, std140: three ints, a pad, a vec4; 32 bytes) the game sets for each draw.
-pub const DRAW_UNIFORMS: [(&str, &str); 4] = [
+/// (`HzDraw`, std140: four ints, a vec4; 32 bytes) the game sets for each draw.
+pub const DRAW_UNIFORMS: [(&str, &str); 5] = [
     ("renderStage", "int"),
     ("entityId", "int"),
     ("blockEntityId", "int"),
+    ("currentRenderedItemId", "int"),
     ("entityColor", "vec4"),
 ];
 
@@ -385,7 +386,7 @@ fn translate(
         if draw {
             h.push_str(
                 "layout(set = 2, binding = 0) uniform HzDraw { int renderStage; int entityId; \
-                 int blockEntityId; int hz_draw_pad; vec4 entityColor; };\n",
+                 int blockEntityId; int currentRenderedItemId; vec4 entityColor; };\n",
             );
         }
         let direction = if stage.kind == ShaderStage::Vertex {
@@ -2080,6 +2081,73 @@ in VertexData {{ {member} }} vIn;
             .collect();
         for name in ["shadowModelView", "shadowProjection", "gbufferModelView"] {
             assert!(names.contains(&name), "{name} missing from {names:?}");
+        }
+    }
+
+    #[test]
+    fn rendered_item_id_is_per_draw_in_gbuffers_and_shadows() {
+        // The format exposes this id in either shader stage for the item,
+        // armour or trim currently drawn, independently of the entity id.
+        let files = [
+            (
+                "shaders/gbuffers_entities.vsh",
+                "#version 330\nuniform int currentRenderedItemId;\nflat out int item;\n\
+                 void main() { gl_Position = ftransform(); item = currentRenderedItemId; }\n",
+            ),
+            (
+                "shaders/gbuffers_entities.fsh",
+                "#version 330\nuniform int currentRenderedItemId;\nuniform vec4 entityColor;\n\
+                 flat in int item;\nout vec4 color;\n\
+                 void main() { color = vec4(float(item), float(currentRenderedItemId), entityColor.r, 1.0); }\n",
+            ),
+        ];
+        let pack = Pack::from_zip_bytes("P.zip", zip(&files)).unwrap();
+        let macros = Macros::standard();
+        let vertex = preprocess(&pack, "gbuffers_entities.vsh", &macros);
+        let fragment = preprocess(&pack, "gbuffers_entities.fsh", &macros);
+        let inputs = GbuffersInputs {
+            body: "    hz_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
+            ..Default::default()
+        };
+        for program in [
+            translate_gbuffers(&vertex, &fragment, Target::Buffers, &inputs),
+            translate_shadow(&vertex, &fragment, &inputs),
+        ] {
+            let program = program.unwrap_or_else(|e| panic!("{e:?}"));
+            assert!(program.interface.draw);
+            assert!(
+                program
+                    .interface
+                    .uniforms
+                    .iter()
+                    .all(|u| { u.name != "currentRenderedItemId" && u.name != "entityColor" }),
+                "per-draw values must not read the frame's uniform buffer"
+            );
+            for module in [&program.vertex, &program.fragment] {
+                let (_, draw) = module
+                    .global_variables
+                    .iter()
+                    .find(|(_, global)| {
+                        global
+                            .binding
+                            .as_ref()
+                            .is_some_and(|b| b.group == 2 && b.binding == 0)
+                    })
+                    .expect("draw buffer is available to both shader stages");
+                let naga::TypeInner::Struct { members, span } = &module.types[draw.ty].inner else {
+                    panic!("draw uniform must be a std140 block");
+                };
+                assert_eq!(*span, 32, "host's draw slot remains 32 bytes");
+                let offset = |name: &str| {
+                    members
+                        .iter()
+                        .find(|member| member.name.as_deref() == Some(name))
+                        .unwrap_or_else(|| panic!("missing per-draw field {name}"))
+                        .offset
+                };
+                assert_eq!(offset("currentRenderedItemId"), 12);
+                assert_eq!(offset("entityColor"), 16);
+            }
         }
     }
 

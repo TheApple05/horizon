@@ -169,7 +169,8 @@ struct Params {
     reach_sections: i32,
     /// `REACH`, `SKY`.
     flags: u32,
-    pad: u32,
+    /// The camera's section Y, relative to the level's bottom.
+    cam_y: i32,
 }
 
 /// Counts before the pages' (the shader's `STATS`): the sections `cull` kept,
@@ -329,6 +330,7 @@ fn tables(input: &FrameInputs<'_>, words: &mut Vec<u32>) -> Option<Params> {
         near: radius,
         cam_x: cx,
         cam_z: cz,
+        cam_y: super::camera_section(input.camera, input.min_y).1,
         first: [x0, 0, z0, 0],
         cells: [side as u32, height as u32, side as u32, 0],
         w: [[w[0], w[1], w[2], w[3]], [w[4], w[5], 0, 0]],
@@ -1025,7 +1027,16 @@ mod tests {
     /// (and the pages `prepare` gives them).
     fn keeps(params: &Params, words: &[u32], record: &Record) -> bool {
         let (key, a) = (record.key, record.a);
-        if key[3] < 0 || a[1] == 0 || !near(params, key[0], key[2]) {
+        if key[3] < 0
+            || a[1] == 0
+            || !near(params, key[0], key[2])
+            || !resident::section_y_in_view_distance(
+                key[1],
+                params.cam_y,
+                params.near,
+                params.cells[1] as i32,
+            )
+        {
             return false;
         }
         let c: [u32; 3] = std::array::from_fn(|i| key[i].wrapping_sub(params.first[i]) as u32);
@@ -1321,7 +1332,7 @@ mod tests {
             ("reach_height", offset_of!(Params, reach_height)),
             ("reach_sections", offset_of!(Params, reach_sections)),
             ("flags", offset_of!(Params, flags)),
-            ("pad", offset_of!(Params, pad)),
+            ("cam_y", offset_of!(Params, cam_y)),
         ] {
             assert!(members.contains(&(name.into(), offset)), "Params.{name}");
         }
@@ -1533,7 +1544,21 @@ mod tests {
                 }
             }
             let mut out = Vec::new();
-            r.visible(camera, radius, &frustum, |_| true, |_, _| false, &mut out);
+            r.visible(
+                camera,
+                radius,
+                &frustum,
+                |key| {
+                    resident::section_y_in_view_distance(
+                        key.1,
+                        params.cam_y,
+                        radius,
+                        params.cells[1] as i32,
+                    )
+                },
+                |_, _| false,
+                &mut out,
+            );
             for v in &out {
                 let record = Record::new(v.key, 0, 0, 1, *r.get(v.slot));
                 assert!(
@@ -1664,9 +1689,18 @@ mod tests {
                 let tested = if column { &rows[..] } else { &rows[..1] };
                 for &(y, b) in tested {
                     let record = Record::new((x, y, z), 0, 0, 1, rounded_box(Some(b)));
+                    // Keep the rounding test at every original height and box,
+                    // including boxes the main view's vertical policy rejects.
+                    let cell =
+                        std::array::from_fn(|i| record.key[i].wrapping_sub(params.first[i]) as u32);
                     assert!(
+                        in_frustum(&params, &words, cell, record.a[2]),
+                        "height {lift}, trial {trial}: ({x}, {y}, {z}) inside integer frustum"
+                    );
+                    assert_eq!(
                         keeps(&params, &words, &record),
-                        "height {lift}, trial {trial}: ({x}, {y}, {z}) kept"
+                        resident::section_y_in_view_distance(y, params.cam_y, 3, 24),
+                        "height {lift}, trial {trial}: ({x}, {y}, {z}) main-view policy"
                     );
                 }
                 // The plane's lowest exact value, from the f32 origins, at the corner
@@ -1788,6 +1822,60 @@ mod tests {
     #[test]
     fn the_gpu_draws_what_the_integer_test_keeps() {
         on_each_device(draws_match);
+    }
+
+    /// Read actual indirect arguments with cave culling disabled. Expected
+    /// section layers come from the vanilla distance boundary, independently
+    /// of the CPU mirror of the compute shader.
+    #[test]
+    fn gpu_indirect_draws_obey_vertical_distance_without_a_cave_graph() {
+        on_each_device(|device, queue| {
+            let mut gpu = GpuCulling::new(device).expect("the pass");
+            let mut uploads = Uploads::new(device);
+            for y in [0, 1, 2, 14, 22, 23] {
+                gpu.records.insert(Record::new(
+                    (0, y, 0),
+                    0,
+                    (1000 + y) as u64,
+                    1,
+                    rounded_box(None),
+                ));
+            }
+            let all = Frustum {
+                planes: [Vec4::W; 6],
+            };
+            for (eye_y, radius, expected) in [
+                (161.62, 12, &[2, 14, 22, 23][..]),
+                (161.62, 14, &[0, 1, 2, 14, 22, 23][..]),
+                (1000.0, 12, &[23][..]),
+                (-1000.0, 12, &[0][..]),
+                (-63.5, 12, &[0, 1, 2][..]),
+            ] {
+                let mut encoder = device.create_command_encoder(&Default::default());
+                let input = inputs(DVec3::new(0.5, eye_y, 0.5), radius, &all);
+                assert_eq!(
+                    gpu.prepare(device, queue, &mut uploads, &mut encoder, &input),
+                    Prepared::Gpu
+                );
+                gpu.dispatch(&mut encoder, None);
+                uploads.finish(&encoder);
+                queue.submit([encoder.finish()]);
+                let counts = read(device, queue, &gpu.counts.buffer, (STATS + 1) * 4);
+                assert_eq!(
+                    counts[..3],
+                    [expected.len() as u32; 3],
+                    "eye {eye_y}, radius {radius}"
+                );
+                let draws = read(device, queue, &gpu.draws.buffer, gpu.draws.bytes);
+                let mut layers = Vec::new();
+                for draw in draws[..expected.len() * 5].as_chunks::<5>().0 {
+                    assert_eq!(draw[..3], [6, 1, 0]);
+                    layers.push(draw[3] as i32 - 1000);
+                }
+                layers.sort_unstable();
+                assert_eq!(layers, expected, "eye {eye_y}, radius {radius}");
+            }
+        });
     }
 
     fn draws_match(device: &wgpu::Device, queue: &Queue) {

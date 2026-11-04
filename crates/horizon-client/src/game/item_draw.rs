@@ -369,6 +369,7 @@ impl Game<'_> {
             }
         }
         state.hdr_tier = self.luminance().hdr_tier(&stack.item);
+        state.shader_item_id = self.rendered_item_for_pack(stack);
         if state.hdr_tier > 0 && self.renderer.as_ref().is_some_and(|r| r.hdr_on()) {
             state.hdr_light = self.luminance().of(&stack.item);
         }
@@ -431,6 +432,7 @@ impl Game<'_> {
         lights: (glam::Vec3, glam::Vec3),
         out: &mut Vec<Vertex>,
     ) {
+        let item_span = self.item_span(state, out.len());
         let mut sink = WorldSink {
             out,
             light: item_hdr_light(state, light),
@@ -445,6 +447,7 @@ impl Game<'_> {
             pose,
             &mut sink,
         );
+        self.end_item_span(out.len(), item_span);
     }
     /// [`Self::submit_item_world`] without the level's diffuse shading.
     pub(super) fn submit_item_unlit(
@@ -454,6 +457,7 @@ impl Game<'_> {
         light: u32,
         out: &mut Vec<Vertex>,
     ) {
+        let item_span = self.item_span(state, out.len());
         let mut sink = WorldSink {
             out,
             light: item_hdr_light(state, light),
@@ -468,6 +472,7 @@ impl Game<'_> {
             pose,
             &mut sink,
         );
+        self.end_item_span(out.len(), item_span);
     }
     /// [`Self::submit_item_lit`] of `state` under each of `poses` on the GPU path: the mark
     /// before its draws and their bounds, or `None` (nothing drawn) when the state cannot
@@ -508,7 +513,48 @@ impl Game<'_> {
             state.hdr_tier,
         );
         let renderer = &self.pack.item_renderer;
-        state.submit_skinned(renderer, &self.gui.atlas.sprites, pose, sink, skin)
+        let previous = state
+            .shader_item_id
+            .filter(|_| self.recording_entity_items)
+            .and_then(|id| {
+                horizon_client::gfx::pack_draw::EntitySpan::item(
+                    &mut skin.frame.spans,
+                    skin.frame.vertices,
+                    id,
+                )
+            });
+        let drawn = state.submit_skinned(renderer, &self.gui.atlas.sprites, pose, sink, skin);
+        horizon_client::gfx::pack_draw::EntitySpan::restore(
+            &mut skin.frame.spans,
+            skin.frame.vertices,
+            previous,
+        );
+        drawn
+    }
+
+    fn item_span(
+        &self,
+        state: &ItemRenderState,
+        start: usize,
+    ) -> Option<horizon_client::gfx::pack_draw::EntitySpan> {
+        tag_item_span(
+            self.recording_entity_items,
+            state,
+            &mut self.entity_spans.borrow_mut(),
+            start as u32,
+        )
+    }
+
+    fn end_item_span(
+        &self,
+        end: usize,
+        previous: Option<horizon_client::gfx::pack_draw::EntitySpan>,
+    ) {
+        horizon_client::gfx::pack_draw::EntitySpan::restore(
+            &mut self.entity_spans.borrow_mut(),
+            end as u32,
+            previous,
+        );
     }
     /// [`Self::submit_item_world`] of `state` under `pose` on the GPU path, its draws counted
     /// with an entity's (`skinned`: its mark and bounds, `cull_skinned`'s); false, with
@@ -653,10 +699,60 @@ fn item_hdr_light(state: &ItemRenderState, light: u32) -> u32 {
     (light & !0xff00) | block << 8
 }
 
+fn tag_item_span(
+    recording: bool,
+    state: &ItemRenderState,
+    spans: &mut Vec<horizon_client::gfx::pack_draw::EntitySpan>,
+    start: u32,
+) -> Option<horizon_client::gfx::pack_draw::EntitySpan> {
+    // A world item_display may use any model transform, including GUI and
+    // first-person. The extraction target, not that transform, decides tagging.
+    let id = state.shader_item_id.filter(|_| recording)?;
+    horizon_client::gfx::pack_draw::EntitySpan::item(spans, start, id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn world_item_displays_keep_ids_for_gui_and_first_person_transforms() {
+        use horizon_client::gfx::pack_draw::EntitySpan;
+        for display in [
+            DisplayContext::Gui,
+            DisplayContext::FirstPersonLeftHand,
+            DisplayContext::FirstPersonRightHand,
+            DisplayContext::Fixed,
+        ] {
+            let state = ItemRenderState {
+                display,
+                layers: Vec::new(),
+                oversized_in_gui: false,
+                animated: false,
+                cit_glint: None,
+                hdr_tier: 0,
+                hdr_light: 0,
+                shader_item_id: Some(71),
+            };
+            let mut spans = vec![EntitySpan {
+                id: 19,
+                ..Default::default()
+            }];
+            let previous = tag_item_span(true, &state, &mut spans, 4);
+            assert_eq!(
+                spans.last().map(|s| (s.id, s.item_id)),
+                Some((19, Some(71)))
+            );
+            EntitySpan::restore(&mut spans, 8, previous);
+            let before = spans.clone();
+            assert!(tag_item_span(false, &state, &mut spans, 8).is_none());
+            assert_eq!(
+                spans, before,
+                "real UI and hand buffers do not change world spans"
+            );
+        }
+    }
 
     #[test]
     fn civil_dates_follow_the_gregorian_calendar() {

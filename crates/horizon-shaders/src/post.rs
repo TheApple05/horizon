@@ -421,6 +421,8 @@ pub struct Post {
     pub lines: Option<PostProgram>,
     /// What draws rain and snow, after deferred.
     pub weather: Option<PostProgram>,
+    /// `rain.depth`: whether rain and snow write depthtex0 (default false).
+    pub rain_depth: bool,
     /// What draws the first-person hand and held items.
     pub hand: Option<PostProgram>,
     /// `clouds=off`: no clouds at all, neither the game's nor the pack's program for them.
@@ -616,6 +618,7 @@ pub fn load_post(
         clouds: None,
         lines: None,
         weather: None,
+        rain_depth: false,
         hand: None,
         clouds_off: false,
         shadow_pass: false,
@@ -858,6 +861,7 @@ pub fn load_post(
     loader.post.weather = weather;
     loader.post.hand = hand;
     let flag = |key: &str| properties.get(key).map(|v| v.trim() == "true");
+    loader.post.rain_depth = flag("rain.depth").unwrap_or(false);
     loader.post.translucent_late = flag("separateEntityDraws").unwrap_or(false);
     // `after` when the pack has a deferred program, else `mixed`; ours are all translucent, so
     // `mixed` draws them after deferred too.
@@ -1827,6 +1831,46 @@ blend.composite1.colortex3 = ONE ONE ONE ONE
                 ("composite2", None, 0),
             ]
         );
+    }
+
+    #[test]
+    fn smoothing_constants_come_from_active_stages_across_programs() {
+        let pack = Pack::from_zip_bytes(
+            "smoothing.zip",
+            zip(&[
+                ("shaders/deferred.vsh", VSH),
+                (
+                    "shaders/deferred.fsh",
+                    "#version 120\nconst float wetnessHalflife = 14.0;\n\
+                     void main() { gl_FragColor = vec4(1.0); }\n",
+                ),
+                (
+                    "shaders/composite.vsh",
+                    "#version 120\nvarying vec2 uv;\nconst float drynessHalflife = 90.0;\n\
+                     #if 0\nconst float wetnessHalflife = 999.0;\n#endif\n\
+                     void main() { gl_Position = ftransform(); uv = gl_MultiTexCoord0.xy; }\n",
+                ),
+                ("shaders/composite.fsh", FSH),
+            ]),
+        )
+        .unwrap();
+        let post = load_post(
+            &pack,
+            "",
+            &Properties::default(),
+            &Macros::standard(),
+            &GameInputs::default(),
+        );
+        assert!(post.notes.is_empty(), "{:?}", post.notes);
+        assert!(post.config.notes.is_empty(), "{:?}", post.config.notes);
+        let names: Vec<&str> = post
+            .programs
+            .iter()
+            .map(|program| program.name.as_str())
+            .collect();
+        assert_eq!(names, ["deferred", "composite"]);
+        assert_eq!(post.config.smoothing.wetness_halflife, 14.0);
+        assert_eq!(post.config.smoothing.dryness_halflife, 90.0);
     }
 
     #[test]

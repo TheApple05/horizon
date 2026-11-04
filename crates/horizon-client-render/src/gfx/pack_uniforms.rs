@@ -4,7 +4,7 @@
 //! [-w, w], and the depth buffers packs read hold GL window depth.
 
 use glam::{DMat4, DVec3, Mat4, Vec3, Vec4};
-use horizon_shaders::Shadow;
+use horizon_shaders::{Shadow, Smoothing};
 
 use super::Frame;
 
@@ -279,6 +279,7 @@ pub const NAMES: &[&str] = &[
     "logicalHeightLimit",
     "hasSkylight",
     "hasCeiling",
+    "lightningBoltPosition",
     "cloudTime",
     "isElytraFlying",
     "cloudHeight",
@@ -307,6 +308,8 @@ pub struct FrameUniforms {
     center_depth: Option<f32>,
     /// The pack's shadow settings (7.1).
     pub shadow: Shadow,
+    /// The pack's raw smoothing half-lives (7.2), independent of the measured unit conversion.
+    pub smoothing: Smoothing,
 }
 
 impl Default for FrameUniforms {
@@ -323,6 +326,7 @@ impl Default for FrameUniforms {
             center_depth_raw: None,
             center_depth: None,
             shadow: Shadow::default(),
+            smoothing: Smoothing::default(),
         }
     }
 }
@@ -411,11 +415,16 @@ pub fn shadow_camera(light: Vec3, camera: DVec3, shadow: &Shadow) -> (Mat4, Mat4
 
 /// The seconds a tick of a smoothing half-life (`wetnessHalflife`, `eyeBrightnessHalflife`,
 /// `centerDepthHalflife`) lasts in Iris 1.11.7: measured, twice a game tick.
+/// A full-pack uniform readback independently measured 70 units as about 7 shader seconds.
 const SECONDS_A_TICK: f32 = 0.1;
 
 /// `value` moved toward `target` with a half-life of `half_life` seconds over `dt` (5.6).
 fn smooth(value: f32, target: f32, half_life: f32, dt: f32) -> f32 {
-    target + (value - target) * 0.5f32.powf(dt / half_life)
+    if half_life <= 0.0 {
+        target
+    } else {
+        target + (value - target) * 0.5f32.powf(dt / half_life)
+    }
 }
 
 impl FrameUniforms {
@@ -464,9 +473,9 @@ impl FrameUniforms {
         // with a probe pack: wetness 60 s rising, 20 s falling; eyeBrightnessSmooth 1 s;
         // centerDepthSmooth 0.1 s).
         let half_life = if inputs.rain > self.wetness {
-            600.0
+            self.smoothing.wetness_halflife
         } else {
-            200.0
+            self.smoothing.dryness_halflife
         };
         self.wetness = smooth(self.wetness, inputs.rain, half_life * SECONDS_A_TICK, dt);
         let eye = inputs.eye_light.map(|l| (l * 16) as f32);
@@ -533,6 +542,15 @@ impl FrameUniforms {
                 "centerDepthSmooth" => Value::f(&[center_depth]),
                 "moonPosition" => v3(moon),
                 "shadowLightPosition" => v3(if day { sun } else { moon }),
+                // Shader-format documentation: camera-relative world axes (player
+                // space), w=1 for a rendered bolt and vec4(0) when none is drawn.
+                // Any currently drawn bolt is valid when several are present.
+                "lightningBoltPosition" => {
+                    Value::f(&frame.lightning.bolts.first().map_or([0.0; 4], |bolt| {
+                        let p = (DVec3::from_array(bolt.at) - frame.camera).as_vec3();
+                        [p.x, p.y, p.z, 1.0]
+                    }))
+                }
                 "sunAngle" => Value::f(&[sun_angle]),
                 "shadowAngle" => Value::f(&[if day { sun_angle } else { sun_angle - 0.5 }]),
                 "worldTime" => Value::i(&[day_time]),
@@ -694,6 +712,7 @@ fn status_value(name: &str, inputs: &PackInputs) -> Option<Value> {
 /// How many components the uniform `name` has (16 for a matrix).
 fn components(name: &str) -> usize {
     match name {
+        "lightningBoltPosition" => 4,
         "cameraPosition"
         | "previousCameraPosition"
         | "cameraPositionInt"
@@ -922,6 +941,44 @@ mod initial_history_tests {
         match u.values[index(name).unwrap()] {
             Value::F(v) => v,
             _ => panic!("float uniform expected"),
+        }
+    }
+    #[test]
+    fn lightning_position_is_camera_relative_and_custom_uniforms_see_its_flag() {
+        let hud = HudBatch::new([800, 450]);
+        let mut f = frame(&hud);
+        f.camera = DVec3::new(10_000_000.25, 80.0, -7.0);
+        f.yaw = 90.0; // Player space keeps world axes; it is not view space.
+        let bolts = [super::super::lightning::Bolt {
+            at: [10_000_003.75, 72.0, -2.0],
+            seed: 42,
+        }];
+        f.lightning.bolts = &bolts;
+        let mut u = FrameUniforms::default();
+        u.update(&f, &PackInputs::default(), [800, 450]);
+        assert_eq!(
+            &float(&u, "lightningBoltPosition")[..4],
+            &[3.5, -8.0, 5.0, 1.0]
+        );
+        // Exercise the actual evaluator too: supplying only xyz would silently
+        // suppress the flash even while the direct vec4 uniform was correct.
+        let properties = horizon_shaders::Properties::parse(
+            "uniform.float.flash = if(lightningBoltPosition.w > 0.5, 1.0, 0.0)",
+            &horizon_shaders::Macros::standard(),
+        );
+        let mut custom = horizon_shaders::Custom::parse(&properties);
+        u.eval_custom(&mut custom);
+        match u.values[NAMES.len()] {
+            Value::F(v) => assert_eq!(v[0], 1.0),
+            _ => panic!("float flash expected"),
+        }
+        f.lightning.bolts = &[];
+        u.update(&f, &PackInputs::default(), [800, 450]);
+        assert_eq!(&float(&u, "lightningBoltPosition")[..4], &[0.0; 4]);
+        u.eval_custom(&mut custom);
+        match u.values[NAMES.len()] {
+            Value::F(v) => assert_eq!(v[0], 0.0),
+            _ => panic!("float flash expected"),
         }
     }
     #[test]
@@ -1311,6 +1368,39 @@ mod initial_history_tests {
         assert!((float(&u, "wetness")[0] - 0.25).abs() < 1e-3);
     }
 
+    #[test]
+    fn wetness_uses_pack_half_lives_and_zero_applies_immediately() {
+        let hud = HudBatch::new([800, 450]);
+        let f = frame(&hud);
+        let mut u = FrameUniforms {
+            smoothing: Smoothing {
+                wetness_halflife: 14.0,
+                dryness_halflife: 90.0,
+            },
+            ..Default::default()
+        };
+        let mut inputs = PackInputs::default();
+        u.update(&f, &inputs, [800, 450]);
+        inputs.rain = 1.0;
+        u.last = Some(std::time::Instant::now() - std::time::Duration::from_secs_f32(1.4));
+        u.update(&f, &inputs, [800, 450]);
+        assert!((float(&u, "wetness")[0] - 0.5).abs() < 1e-3);
+        inputs.rain = 0.0;
+        u.last = Some(std::time::Instant::now() - std::time::Duration::from_secs_f32(9.0));
+        u.update(&f, &inputs, [800, 450]);
+        assert!((float(&u, "wetness")[0] - 0.25).abs() < 1e-3);
+
+        u.smoothing.wetness_halflife = 0.0;
+        inputs.rain = 1.0;
+        u.update(&f, &inputs, [800, 450]);
+        assert_eq!(float(&u, "wetness")[0], 1.0);
+        u.smoothing.dryness_halflife = 0.0;
+        inputs.rain = 0.0;
+        u.update(&f, &inputs, [800, 450]);
+        assert_eq!(float(&u, "wetness")[0], 0.0);
+        assert_eq!(smooth(0.0, 0.75, 0.0, 0.0), 0.75);
+    }
+
     /// Iris 1.11.7 (probe pack): `ambientLight` is the dimension type's (0.1 in the Nether,
     /// 0.25 in the End), and `playerMood` and `constantMood` both the cave mood.
     #[test]
@@ -1388,6 +1478,7 @@ mod initial_history_tests {
             celestial: &[],
             stars: None,
             hand: &[],
+            hand_spans: &[],
             hand_fov_degrees: 70.0,
             screen: &[],
             pack: Default::default(),

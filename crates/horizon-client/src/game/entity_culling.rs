@@ -443,7 +443,7 @@ impl Game<'_> {
             if hidden
                 && !(self.pack_shadow_casters.0 && self.hide_spans_from(start, vertices.len()))
             {
-                vertices.truncate(start);
+                self.truncate_entity_vertices(vertices, start);
             }
             return hidden;
         }
@@ -460,12 +460,20 @@ impl Game<'_> {
             .and_then(|culler| culler.proof(&query))
             .is_some_and(|proof| self.async_proof_is_current(proof));
         if hidden && !(self.pack_shadow_casters.0 && self.hide_spans_from(start, vertices.len())) {
-            vertices.truncate(start);
+            self.truncate_entity_vertices(vertices, start);
         }
         if let Some(culler) = &self.async_entity_culler {
             culler.queue(query);
         }
         hidden
+    }
+
+    pub(super) fn truncate_entity_vertices(&self, vertices: &mut Vec<Vertex>, end: usize) {
+        vertices.truncate(end);
+        horizon_client::gfx::pack_draw::EntitySpan::truncate(
+            &mut self.entity_spans.borrow_mut(),
+            vertices.len() as u32,
+        );
     }
 
     fn async_proof_is_current(&self, proof: &OcclusionProof) -> bool {

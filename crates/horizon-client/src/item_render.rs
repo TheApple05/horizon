@@ -209,6 +209,8 @@ pub struct ItemRenderState {
     /// In HDR output, the block light of an item that glows: its block's, as a placed one has
     /// it, so a torch doesn't go dark in the shade while it shines. 0 for the rest.
     pub hdr_light: u8,
+    /// The shader pack's id of this resolved item, when a pack is active.
+    pub shader_item_id: Option<i32>,
 }
 impl ItemRenderState {
     pub fn is_empty(&self) -> bool {
@@ -892,6 +894,7 @@ impl ItemRenderer {
             cit_glint: None,
             hdr_tier: 0,
             hdr_light: 0,
+            shader_item_id: None,
         }
     }
     /// `GrassColor.get` over the loaded colormap.

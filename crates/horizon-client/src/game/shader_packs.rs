@@ -144,7 +144,75 @@ pub(super) struct PackIds {
     pub(super) separate_ao: bool,
 }
 
+impl PackIds {
+    fn rendered_item(&self, item: &str, block: Option<&horizon_world::chunk::BlockState>) -> i32 {
+        // Block items have the placed block's identity; ordinary items, armour
+        // and synthetic trim names use item.properties.
+        block
+            .and_then(|state| {
+                self.blocks.id(&state.name, |key| {
+                    state.properties.get(key).map(String::as_str)
+                })
+            })
+            .or_else(|| self.items.get(item).copied())
+            .unwrap_or(self.missing_item)
+    }
+}
+
+#[cfg(test)]
+mod item_id_tests {
+    use super::*;
+
+    #[test]
+    fn rendered_items_use_item_ids_and_placed_block_ids() {
+        let blocks = BlockIds::parse(&Properties::parse(
+            "block.303 = minecraft:glass\n",
+            &Macros::standard(),
+        ));
+        let ids = PackIds {
+            entities: HashMap::new(),
+            blocks,
+            block_states: RefCell::default(),
+            missing_entity: 0,
+            missing_block: 65535,
+            items: [
+                ("minecraft:torch".into(), 17),
+                ("minecraft:iron_helmet".into(), 29),
+                ("minecraft:glass".into(), 44),
+            ]
+            .into(),
+            missing_item: -1,
+            old_hand_light: false,
+            vignette: true,
+            old_lighting: false,
+            separate_ao: false,
+        };
+        assert_eq!(ids.rendered_item("minecraft:torch", None), 17);
+        assert_eq!(ids.rendered_item("minecraft:iron_helmet", None), 29);
+        assert_eq!(ids.rendered_item("minecraft:stick", None), -1);
+        let glass = horizon_world::chunk::BlockState {
+            name: "minecraft:glass".into(),
+            properties: Default::default(),
+        };
+        assert_eq!(ids.rendered_item("minecraft:glass", Some(&glass)), 303);
+    }
+}
+
 impl Game<'_> {
+    pub(super) fn rendered_item_for_pack(
+        &self,
+        stack: &horizon_client::items::ItemStack,
+    ) -> Option<i32> {
+        let ids = self.pack_ids.as_ref()?;
+        let block = self
+            .res
+            .items()
+            .get(&stack.item)
+            .and_then(|info| info.block)
+            .and_then(|state| self.pack.assets.registry.state(state));
+        Some(ids.rendered_item(&stack.item, block))
+    }
+
     /// Loads the pack for the current dimension when it changed, and returns this frame's
     /// inputs to the pack's uniforms.
     pub(super) fn shader_pack_inputs(
