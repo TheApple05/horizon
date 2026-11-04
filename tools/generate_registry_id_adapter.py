@@ -250,6 +250,16 @@ def main():
         for i in range(0, len(names), 6):
             lines.append("    " + ", ".join(json.dumps(name) for name in names[i:i + 6]) + ",")
         lines.append("];")
+    # Data components the pinned version no longer has: the item readers read their values past and drop them.
+    old_components = entries(old_reg, "minecraft:data_component_type")
+    new_components = entries(new_reg, "minecraft:data_component_type")
+    known = renames.get("minecraft:data_component_type", {})
+    dropped = sorted((i, name) for name, i in old_components.items()
+                     if name not in new_components and name not in known)
+    lines.append(f"/// Data components {old_info['id']} has and the pinned version lacks, by their {old_info['id']} id.")
+    lines.append("pub const DROPPED_COMPONENTS: &[(u16, &str)] = &[")
+    lines.extend(f'    ({i}, "{name}"),' for i, name in dropped)
+    lines.append("];")
     lines.append(f"/// Every table above, as the adapter reads them.")
     lines.append("pub const IDS: super::ids::Ids = super::ids::Ids {")
     if not inherited_module:
@@ -266,6 +276,7 @@ def main():
         else:
             name = const_name(registry)
             lines.append(f"    {field}: super::ids::Remap::Runs {{ up: {name}_UP, down: {name}_DOWN }},")
+    lines.append("    dropped_components: DROPPED_COMPONENTS,")
     if inherited_module:
         lines.append(f"    // Unchanged registries and block states were checked against {inherited_module}'s reports.")
         lines.append(f"    ..super::{inherited_module}::IDS")
