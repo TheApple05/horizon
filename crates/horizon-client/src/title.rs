@@ -725,6 +725,7 @@ impl Mode {
             Self::Recovered { .. } => "world_recovered",
             Self::Error { .. } => "error",
             Self::Multiplayer(screen) => screen.id(),
+            Self::Realms(_) => "realms",
             Self::MultiplayerWarning { .. } => "multiplayer_warning",
             Self::Onboarding(_) => "onboarding",
             Self::BanNotice(_) => "ban_notice",
@@ -2369,6 +2370,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 ),
             ),
             Mode::Multiplayer(_) => return None,
+            Mode::Realms(_) => ScreenInfo::new("realms", get("menu.online", "Minecraft Realms")),
         };
         Some(info)
     }
@@ -3482,7 +3484,10 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                     self.mode = Mode::Main;
                     Action::None
                 }
-                crate::realms::Outcome::Connect(address) => Action::Connect { address },
+                crate::realms::Outcome::Connect(address) => Action::Connect {
+                    address,
+                    lan: false,
+                },
                 crate::realms::Outcome::None => Action::None,
             },
             (Mode::MultiplayerWarning { .. }, Some(71)) => {
