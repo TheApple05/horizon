@@ -51,6 +51,9 @@ pub use terrain_noise::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SampleError {
     Volume(DensityError),
+    /// A bound sampler could not produce a value. Keep errors explicit across
+    /// scalar, bulk and compiled-graph evaluation without inventing a density.
+    External(&'static str),
     ZeroGradientPeriod,
     ExactBufferSizeRequired,
     CacheIdOutOfRange,
@@ -67,6 +70,7 @@ impl std::fmt::Display for SampleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Volume(error) => error.fmt(f),
+            Self::External(reason) => write!(f, "external density sampler failed: {reason}"),
             Self::SurfaceRequiresSingleLayer => {
                 f.write_str("surface search requires a single Y layer")
             }
