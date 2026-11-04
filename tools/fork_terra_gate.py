@@ -41,7 +41,7 @@ def main() -> int:
     parser.add_argument("--expected-mod-sha256", required=True)
     args = parser.parse_args()
     output = args.output.resolve()
-    report: dict = {"schema": 1, "status": "failed", "runtimeExecuted": False,
+    report: dict = {"schema": 1, "status": "running", "runtimeExecuted": False,
                     "startedAt": dt.datetime.now(dt.timezone.utc).isoformat()}
     originals: dict[Path, str] = {}
     created_output = False
@@ -144,7 +144,7 @@ def main() -> int:
                        "probeReport": str(output / "probe.json"), "blockCount": verdict["blockCount"],
                        "quartBiomeCount": verdict["quartBiomeCount"], "chunkCount": verdict["chunkCount"]})
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
-        report["error"] = str(error)
+        report.update(status="failed", error=str(error))
     finally:
         unchanged = all(path.is_file() and sha(path) == value for path, value in originals.items())
         report["originalPackageUnchanged"] = unchanged
