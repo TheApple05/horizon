@@ -201,6 +201,8 @@ fn potion_sprite(item: &str) -> &'static str {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Projectile {
+    /// Protocol47 supplies a fixed acceleration direction and moves before applying inertia.
+    pub legacy47_acceleration: Option<[f64; 3]>,
     /// When it joined its list ([`crate::join_seq`]); set by the list, not by the spawn site.
     pub join: crate::join_seq::JoinSeq,
     /// The entity id a server tracks it by (0 until it is tracked).
@@ -392,6 +394,7 @@ impl Projectile {
             0.1
         };
         Self {
+            legacy47_acceleration: None,
             join: Default::default(),
             id: 0,
             kind,
@@ -996,7 +999,34 @@ impl Projectile {
         (self.position.y > -128.0, Hit::None)
     }
     /// AbstractHurtingProjectile.applyInertia, on both server and client.
+    pub fn set_legacy47_acceleration(&mut self, wire: [f64; 3]) -> bool {
+        if !matches!(
+            self.kind,
+            ProjectileKind::SmallFireball
+                | ProjectileKind::LargeFireball { .. }
+                | ProjectileKind::WitherSkull { .. }
+        ) {
+            return false;
+        }
+        let Some(acceleration) = legacy47_flight::acceleration_from_wire(wire) else {
+            return false;
+        };
+        self.legacy47_acceleration = Some(acceleration);
+        self.velocity = Vec3::ZERO;
+        true
+    }
     pub fn apply_hurting_inertia(&mut self, water: bool) {
+        if let Some(acceleration) = self.legacy47_acceleration {
+            let next = legacy47_flight::next_velocity(
+                [self.velocity.x, self.velocity.y, self.velocity.z],
+                acceleration,
+                water,
+                matches!(self.kind, ProjectileKind::WitherSkull { dangerous: true }),
+            );
+            self.velocity = Vec3::new(next[0], next[1], next[2]);
+            return;
+        }
+
         // WitherSkull.getInertia: 0.73 for dangerous skulls.
         // Vanilla returns float inertia and widens it before scaling double motion.
         let inertia = f64::from(match self.kind {
@@ -1085,7 +1115,9 @@ impl Projectile {
             | ProjectileKind::WitherSkull { .. }
             | ProjectileKind::WindCharge
             | ProjectileKind::BreezeWindCharge => {
-                self.apply_hurting_inertia(water);
+                if self.legacy47_acceleration.is_none() {
+                    self.apply_hurting_inertia(water);
+                }
             }
             // Arrows and tridents tick with `arrows::tick`.
             ProjectileKind::Arrow { .. } | ProjectileKind::Trident => {}
@@ -1187,6 +1219,9 @@ impl Projectile {
             return (self.position.y > -128.0 && self.age < 6000, spit_hit);
         }
         self.position = to;
+        if self.legacy47_acceleration.is_some() {
+            self.apply_hurting_inertia(water);
+        }
         if !self.is_fireball() {
             self.update_rotation();
         }
@@ -1995,3 +2030,6 @@ mod render_light_tests {
     }
 }
 crate::impl_joined!(Projectile);
+
+#[path = "legacy47_flight.rs"]
+mod legacy47_flight;

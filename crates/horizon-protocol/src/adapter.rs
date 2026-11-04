@@ -6,8 +6,17 @@
 //! translated a release at a time (26.1 to 26.2, then 26.2 to 26.3), with its ids mapped straight to the
 //! pinned ones.
 pub mod ids;
+mod legacy;
 pub mod session;
 mod translate;
+pub mod v1_8_9;
+pub(crate) use translate::v1_20_2::read_component as read_legacy_component;
+pub mod v1_20_1;
+pub(crate) mod v1_20_1_ids;
+pub mod v1_20_2;
+mod v1_20_2_ids;
+pub mod v1_20_3;
+mod v1_20_3_ids;
 pub mod v1_20_5;
 mod v1_20_5_ids;
 pub mod v1_21_1;
@@ -59,11 +68,18 @@ pub enum ServerVersion {
     V1_21_1,
     /// 1.20.5 and 1.20.6: one protocol.
     V1_20_5,
+    /// 1.20.3 and 1.20.4: one protocol.
+    V1_20_3,
+    V1_20_2,
+    /// 1.20 and 1.20.1: one protocol. Development target pending native validation.
+    V1_20_1,
+    /// Java1.8.x, translated directly to native consumer packets.
+    V1_8_9,
 }
 
 impl ServerVersion {
     /// Newest first.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 16] = [
         Self::Current,
         Self::V26_2,
         Self::V26_1,
@@ -76,6 +92,10 @@ impl ServerVersion {
         Self::V1_21_3,
         Self::V1_21_1,
         Self::V1_20_5,
+        Self::V1_20_3,
+        Self::V1_20_2,
+        Self::V1_20_1,
+        Self::V1_8_9,
     ];
 
     /// Whether this is `other` or an older release: the translation steps from `other` up apply.
@@ -99,6 +119,10 @@ impl ServerVersion {
             Self::V1_21_3 => v1_21_3::PROTOCOL,
             Self::V1_21_1 => v1_21_1::PROTOCOL,
             Self::V1_20_5 => v1_20_5::PROTOCOL,
+            Self::V1_20_3 => v1_20_3::PROTOCOL,
+            Self::V1_20_2 => v1_20_2::PROTOCOL,
+            Self::V1_20_1 => v1_20_1::PROTOCOL,
+            Self::V1_8_9 => 47,
         }
     }
 
@@ -117,6 +141,10 @@ impl ServerVersion {
             Self::V1_21_3 => v1_21_3::NAME,
             Self::V1_21_1 => v1_21_1::NAME,
             Self::V1_20_5 => v1_20_5::NAME,
+            Self::V1_20_3 => v1_20_3::NAME,
+            Self::V1_20_2 => v1_20_2::NAME,
+            Self::V1_20_1 => v1_20_1::NAME,
+            Self::V1_8_9 => "1.8.9",
         }
     }
 
@@ -305,8 +333,55 @@ impl ServerVersion {
             entity_data_serializer: V1_21_1.entity_data_serializer,
             ..v1_20_5_ids::IDS
         };
+        static V1_20_3: ids::Ids = ids::Ids {
+            quirks: ids::Quirks {
+                legacy_item_nbt: true,
+                legacy_item_data_version: 3698,
+                ..V1_20_5.quirks
+            },
+            // EntityDataSerializers registration order before PARTICLES, WOLF_VARIANT and ARMADILLO_STATE.
+            entity_data_serializer: ids::Remap::Runs {
+                up: &[
+                    (0, 0, 16),
+                    (17, 16, 1),
+                    (18, 18, 4),
+                    (22, 27, 1),
+                    (23, 33, 3),
+                    (26, 39, 2),
+                ],
+                down: &[
+                    (0, 0, 16),
+                    (16, 17, 1),
+                    (18, 18, 4),
+                    (27, 22, 1),
+                    (33, 23, 3),
+                    (39, 26, 2),
+                ],
+            },
+            ..v1_20_3_ids::IDS
+        };
+        static V1_20_2: ids::Ids = ids::Ids {
+            quirks: ids::Quirks {
+                legacy_item_data_version: 3578,
+                components_as_json: true,
+                vibration_source_identifier: true,
+                ..V1_20_3.quirks
+            },
+            entity_data_serializer: V1_20_3.entity_data_serializer,
+            ..v1_20_2_ids::IDS
+        };
+        static V1_20_1: ids::Ids = ids::Ids {
+            quirks: ids::Quirks {
+                legacy_named_nbt: true,
+                // Both protocol763 releases have the same schema and no fix between3463/3465.
+                legacy_item_data_version: 3463,
+                ..V1_20_2.quirks
+            },
+            entity_data_serializer: V1_20_2.entity_data_serializer,
+            ..v1_20_1_ids::IDS
+        };
         match self {
-            Self::Current => None,
+            Self::Current | Self::V1_8_9 => None,
             Self::V26_2 => Some(&V26_2),
             Self::V26_1 => Some(&V26_1),
             Self::V1_21_11 => Some(&V1_21_11),
@@ -318,12 +393,23 @@ impl ServerVersion {
             Self::V1_21_3 => Some(&V1_21_3),
             Self::V1_21_1 => Some(&V1_21_1),
             Self::V1_20_5 => Some(&V1_20_5),
+            Self::V1_20_3 => Some(&V1_20_3),
+            Self::V1_20_2 => Some(&V1_20_2),
+            Self::V1_20_1 => Some(&V1_20_1),
         }
     }
 
     fn map(self, state: State, direction: Direction, id: i32) -> Option<i32> {
         let table = match (self, direction) {
             (Self::Current, _) => return Some(id),
+            (Self::V1_8_9, _) => {
+                return match state {
+                    State::Handshake if id == 0 => Some(id),
+                    State::Status if (0..=1).contains(&id) => Some(id),
+                    State::Login if (0..=3).contains(&id) => Some(id),
+                    _ => None, // Play layouts are handled by the dedicated native bridge.
+                };
+            }
             (Self::V26_2, Direction::Clientbound) => v26_2::clientbound(state),
             (Self::V26_2, Direction::Serverbound) => v26_2::serverbound(state),
             (Self::V26_1, Direction::Clientbound) => v26_1_2::clientbound(state),
@@ -346,6 +432,12 @@ impl ServerVersion {
             (Self::V1_21_1, Direction::Serverbound) => v1_21_1::serverbound(state),
             (Self::V1_20_5, Direction::Clientbound) => v1_20_5::clientbound(state),
             (Self::V1_20_5, Direction::Serverbound) => v1_20_5::serverbound(state),
+            (Self::V1_20_3, Direction::Clientbound) => v1_20_3::clientbound(state),
+            (Self::V1_20_3, Direction::Serverbound) => v1_20_3::serverbound(state),
+            (Self::V1_20_2, Direction::Clientbound) => v1_20_2::clientbound(state),
+            (Self::V1_20_2, Direction::Serverbound) => v1_20_2::serverbound(state),
+            (Self::V1_20_1, Direction::Clientbound) => v1_20_1::clientbound(state),
+            (Self::V1_20_1, Direction::Serverbound) => v1_20_1::serverbound(state),
         };
         let mapped = *table.get(usize::try_from(id).ok()?)?;
         mapped.map(i32::from)
@@ -428,9 +520,23 @@ mod tests {
             ServerVersion::from_protocol(766),
             Some(ServerVersion::V1_20_5)
         );
-        assert_eq!(ServerVersion::from_protocol(765), None);
+        assert_eq!(
+            ServerVersion::from_protocol(765),
+            Some(ServerVersion::V1_20_3)
+        );
+        assert_eq!(
+            ServerVersion::from_protocol(764),
+            Some(ServerVersion::V1_20_2)
+        );
+        assert_eq!(
+            ServerVersion::from_protocol(763),
+            Some(ServerVersion::V1_20_1)
+        );
+        assert_eq!(ServerVersion::from_protocol(762), None);
         assert!(ServerVersion::V26_1.at_most(ServerVersion::V26_2));
         assert!(!ServerVersion::V26_2.at_most(ServerVersion::V26_1));
+        assert!(ServerVersion::V1_20_1.at_most(ServerVersion::V1_20_2));
+        assert!(!ServerVersion::V1_20_2.at_most(ServerVersion::V1_20_1));
     }
 
     #[test]
@@ -511,4 +617,13 @@ mod tests {
             Some(body)
         );
     }
+}
+
+/// Whether a checked local send reached this connection's wire protocol.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SendDisposition {
+    Sent,
+    #[default]
+    Consumed,
+    LocallyRejected,
 }

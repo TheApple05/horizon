@@ -514,14 +514,14 @@ impl PackEntities {
             BLOCK => (0, span.id),
             _ => (span.id, 0),
         };
-        let mut bytes = [0u8; SLOT as usize];
-        bytes[0..4].copy_from_slice(&(span.stage as i32).to_le_bytes());
-        bytes[4..8].copy_from_slice(&entity_id.to_le_bytes());
-        bytes[8..12].copy_from_slice(&block_id.to_le_bytes());
         // The overlay: the layer's low 16 bits (HDR output's tier rides in the high ones).
-        for (i, c) in entity_color(overlay & 0xffff).iter().enumerate() {
-            bytes[16 + 4 * i..20 + 4 * i].copy_from_slice(&c.to_le_bytes());
-        }
+        let bytes = super::pack_draw::encode(
+            span.stage,
+            entity_id,
+            block_id,
+            span.item_id,
+            entity_color(overlay & 0xffff),
+        );
         self.uniforms.extend_from_slice(&bytes);
         self.uniforms
             .resize(self.uniforms.len() + (self.stride - SLOT) as usize, 0);

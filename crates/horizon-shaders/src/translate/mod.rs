@@ -2418,6 +2418,73 @@ in VertexData {{ {member} }} vIn;
     }
 
     #[test]
+    fn rendered_item_id_is_per_draw_in_gbuffers_and_shadows() {
+        // The format exposes this id in either shader stage for the item,
+        // armour or trim currently drawn, independently of the entity id.
+        let files = [
+            (
+                "shaders/gbuffers_entities.vsh",
+                "#version 330\nuniform int currentRenderedItemId;\nflat out int item;\n\
+                 void main() { gl_Position = ftransform(); item = currentRenderedItemId; }\n",
+            ),
+            (
+                "shaders/gbuffers_entities.fsh",
+                "#version 330\nuniform int currentRenderedItemId;\nuniform vec4 entityColor;\n\
+                 flat in int item;\nout vec4 color;\n\
+                 void main() { color = vec4(float(item), float(currentRenderedItemId), entityColor.r, 1.0); }\n",
+            ),
+        ];
+        let pack = Pack::from_zip_bytes("P.zip", zip(&files)).unwrap();
+        let macros = Macros::standard();
+        let vertex = preprocess(&pack, "gbuffers_entities.vsh", &macros);
+        let fragment = preprocess(&pack, "gbuffers_entities.fsh", &macros);
+        let inputs = GbuffersInputs {
+            body: "    hz_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
+            ..Default::default()
+        };
+        for program in [
+            translate_gbuffers(&vertex, &fragment, Target::Buffers, &inputs),
+            translate_shadow(&vertex, &fragment, &inputs),
+        ] {
+            let program = program.unwrap_or_else(|e| panic!("{e:?}"));
+            assert!(program.interface.draw);
+            assert!(
+                program
+                    .interface
+                    .uniforms
+                    .iter()
+                    .all(|u| { u.name != "currentRenderedItemId" && u.name != "entityColor" }),
+                "per-draw values must not read the frame's uniform buffer"
+            );
+            for module in [&program.vertex, &program.fragment] {
+                let (_, draw) = module
+                    .global_variables
+                    .iter()
+                    .find(|(_, global)| {
+                        global
+                            .binding
+                            .as_ref()
+                            .is_some_and(|b| b.group == 2 && b.binding == 0)
+                    })
+                    .expect("draw buffer is available to both shader stages");
+                let naga::TypeInner::Struct { members, span } = &module.types[draw.ty].inner else {
+                    panic!("draw uniform must be a std140 block");
+                };
+                assert_eq!(*span, 32, "host's draw slot remains 32 bytes");
+                let offset = |name: &str| {
+                    members
+                        .iter()
+                        .find(|member| member.name.as_deref() == Some(name))
+                        .unwrap_or_else(|| panic!("missing per-draw field {name}"))
+                        .offset
+                };
+                assert_eq!(offset("currentRenderedItemId"), 12);
+                assert_eq!(offset("entityColor"), 16);
+            }
+        }
+    }
+
+    #[test]
     fn matrix_and_array_varyings_travel_in_parts() {
         let vsh = "#version 120\nvarying mat3 tbn;\nflat varying ivec2 ids[2];\nvarying mat2x3 m[2];\n\
                    void main() {\n    gl_Position = ftransform();\n    tbn = mat3(2.0);\n    \

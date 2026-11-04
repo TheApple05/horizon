@@ -182,10 +182,34 @@ impl Default for Shadow {
     }
 }
 
+/// The smoothing settings of frame uniforms, from recognized GLSL constants (7.2).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Smoothing {
+    /// `wetnessHalflife`: the half-life while wetness rises, in the pack's raw units.
+    /// Zero applies the current rain strength immediately.
+    pub wetness_halflife: f32,
+    /// `drynessHalflife`: the half-life while wetness falls, in the pack's raw units.
+    pub dryness_halflife: f32,
+}
+
+impl Default for Smoothing {
+    fn default() -> Self {
+        Self {
+            wetness_halflife: 600.0,
+            dryness_halflife: 200.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
     pub buffers: [Buffer; BUFFERS],
     pub shadow: Shadow,
+    pub smoothing: Smoothing,
+    /// The observed Iris 1.11.7 wetness-only profile: both recognized half-life
+    /// names assign the rising half-life in encounter order; drying stays default.
+    /// The renderer opts into this profile explicitly; `smoothing` follows the spec.
+    pub iris_1_11_7_smoothing: Smoothing,
     /// Conflicting or unreadable settings, as `file:line: message`.
     pub notes: Vec<String>,
     /// Each setting read so far and its value, to report a later file changing it.
@@ -197,6 +221,8 @@ impl Default for Config {
         Self {
             buffers: std::array::from_fn(|_| Buffer::default()),
             shadow: Shadow::default(),
+            smoothing: Smoothing::default(),
+            iris_1_11_7_smoothing: Smoothing::default(),
             notes: Vec::new(),
             seen: Vec::new(),
         }
@@ -293,6 +319,9 @@ impl Config {
         if !others && !format {
             return;
         }
+        if self.smoothing_constant(place, ty, name, value) {
+            return;
+        }
         if self.shadow_constant(ty, name, value) {
             return;
         }
@@ -343,6 +372,38 @@ impl Config {
 }
 
 impl Config {
+    /// A smoothing setting of 7.2; invalid values leave the prior valid setting intact.
+    fn smoothing_constant(&mut self, place: &str, ty: &str, name: &str, value: &str) -> bool {
+        let setting = match name {
+            "wetnessHalflife" => &mut self.smoothing.wetness_halflife,
+            "drynessHalflife" => &mut self.smoothing.dryness_halflife,
+            _ => return false,
+        };
+        let parsed = (ty == "float")
+            .then(|| number(value))
+            .flatten()
+            .filter(|n| n.is_finite() && *n >= 0.0);
+        let Some(parsed) = parsed else {
+            self.notes.push(format!(
+                "{place}: `{name}` must be a finite non-negative float: `{value}`"
+            ));
+            return true;
+        };
+        *setting = parsed;
+        self.iris_1_11_7_smoothing.wetness_halflife = parsed;
+        match self.seen.iter_mut().find(|(key, _)| key == name) {
+            Some((_, old)) if old != value => {
+                self.notes.push(format!(
+                    "{place}: `{name}` changed by a later file to `{value}`"
+                ));
+                *old = value.to_owned();
+            }
+            Some(_) => {}
+            None => self.seen.push((name.to_owned(), value.to_owned())),
+        }
+        true
+    }
+
     /// A shadow setting of 6.3 or 7.1; true when `name` is one (read or not).
     fn shadow_constant(&mut self, ty: &str, name: &str, value: &str) -> bool {
         let s = &mut self.shadow;
@@ -626,6 +687,100 @@ mod tests {
         assert_eq!(
             nearest("const bool shadowtex0Nearest = false;\n"),
             [false; 2]
+        );
+    }
+
+    #[test]
+    fn iris_1_11_7_wetness_profile_matches_measured_assignment_order() {
+        for (declarations, wetting, drying, reference_wetting) in [
+            (
+                "const float wetnessHalflife = 70.0;\nconst float drynessHalflife = 300.0;",
+                70.0,
+                300.0,
+                300.0,
+            ),
+            (
+                "const float wetnessHalflife = 140.0;\nconst float drynessHalflife = 600.0;",
+                140.0,
+                600.0,
+                600.0,
+            ),
+            (
+                "const float wetnessHalflife = 600.0;\nconst float drynessHalflife = 200.0;",
+                600.0,
+                200.0,
+                200.0,
+            ),
+            (
+                "const float drynessHalflife = 300.0;\nconst float wetnessHalflife = 70.0;",
+                70.0,
+                300.0,
+                70.0,
+            ),
+        ] {
+            let mut config = Config::default();
+            config.read(&stage(declarations));
+            assert_eq!(
+                config.smoothing,
+                Smoothing {
+                    wetness_halflife: wetting,
+                    dryness_halflife: drying,
+                },
+                "spec settings: {declarations}"
+            );
+            assert_eq!(
+                config.iris_1_11_7_smoothing,
+                Smoothing {
+                    wetness_halflife: reference_wetting,
+                    dryness_halflife: 200.0,
+                },
+                "reference settings: {declarations}"
+            );
+            assert!(config.notes.is_empty(), "{:?}", config.notes);
+        }
+    }
+
+    #[test]
+    fn smoothing_rejects_invalid_values_without_losing_valid_overrides() {
+        let mut config = Config::default();
+        config.read(&stage(
+            "const float wetnessHalflife = 14.0;\n\
+             const float drynessHalflife = 90.0;\n",
+        ));
+        for declaration in [
+            "const float wetnessHalflife = -1.0;",
+            "const float drynessHalflife = NaN;",
+            "const float wetnessHalflife = inf;",
+            "const float drynessHalflife = 1e100;",
+            "const int wetnessHalflife = 9;",
+        ] {
+            config.read(&stage(declaration));
+        }
+        assert_eq!(config.smoothing.wetness_halflife, 14.0);
+        assert_eq!(config.smoothing.dryness_halflife, 90.0);
+        assert_eq!(
+            config.iris_1_11_7_smoothing,
+            Smoothing {
+                wetness_halflife: 90.0,
+                dryness_halflife: 200.0,
+            }
+        );
+        assert_eq!(config.notes.len(), 5, "{:?}", config.notes);
+        assert!(
+            config
+                .notes
+                .iter()
+                .all(|note| note.contains("finite non-negative float"))
+        );
+        config.read(&stage("const float wetnessHalflife = 0.0;"));
+        assert_eq!(config.smoothing.wetness_halflife, 0.0);
+        assert_eq!(config.iris_1_11_7_smoothing.wetness_halflife, 0.0);
+        assert!(
+            config
+                .notes
+                .last()
+                .unwrap()
+                .contains("changed by a later file")
         );
     }
 

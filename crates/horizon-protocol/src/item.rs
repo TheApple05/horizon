@@ -12,7 +12,9 @@ use std::sync::Arc;
 #[doc(hidden)]
 pub mod custom;
 mod hash;
+pub(crate) mod item47;
 mod skip;
+pub(crate) mod v1_20_3;
 pub(crate) mod v1_20_5;
 mod v1_21_1;
 mod v1_21_4;
@@ -1046,6 +1048,10 @@ impl Codec<Option<Stack>> for Slot {
     }
 }
 fn write_slot(v: Option<&Stack>, w: &mut Writer) {
+    if v1_20_3::writing() {
+        v1_20_3::write_stack(v, w);
+        return;
+    }
     if v1_21_1::writing() {
         v1_21_1::write_stack(v, w);
         return;
@@ -1075,6 +1081,9 @@ fn write_slot(v: Option<&Stack>, w: &mut Writer) {
 /// has a length in front (DataComponentPatch.DELIMITED_STREAM_CODEC). The
 /// patch is also kept, in the delimited form, for [`Stack::wire`].
 fn read_stack(r: &mut Reader, delimited: bool) -> Result<Option<Stack>> {
+    if v1_20_3::reading() {
+        return v1_20_3::read_stack(r);
+    }
     if v1_21_1::reading() {
         return v1_21_1::read_stack(r);
     }
@@ -1142,6 +1151,10 @@ impl Codec<Option<Stack>> for DelimitedSlot {
         read_stack(r, true)
     }
     fn write(v: &Option<Stack>, w: &mut Writer) {
+        if v1_20_3::writing() {
+            v1_20_3::write_stack(v.as_ref(), w);
+            return;
+        }
         if v1_21_1::writing() {
             v1_21_1::write_stack(v.as_ref(), w);
             return;

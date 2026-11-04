@@ -315,15 +315,16 @@ fn components_tag(s: &Stack, builtin: &Builtin, synced: &Dynamic) -> Option<Tag>
                     })
                     .collect(),
             ),
-            // PotionContents' NBT: the potion by name and the custom colour.
-            Component::Potion { potion, color, .. } => {
-                let potion = potion.and_then(|id| builtin.get("minecraft:potion")?.name(id));
-                Tag::compound(
-                    potion
-                        .map(|name| ("potion", Tag::String(name.into())))
-                        .into_iter()
-                        .chain(color.map(|c| ("custom_color", Tag::Int(c)))),
-                )
+            // PotionContents' NBT: base, colour, custom effects and name.
+            Component::Potion {
+                potion,
+                color,
+                rest,
+            } => {
+                let Some(contents) = potion_contents_tag(*potion, *color, rest, builtin) else {
+                    continue;
+                };
+                contents
             }
             // ItemStackTemplate.CODEC: id, count and components.
             Component::Stacks(stacks) => Tag::List(
@@ -392,6 +393,85 @@ fn components_tag(s: &Stack, builtin: &Builtin, synced: &Dynamic) -> Option<Tag>
         }
     }
     Some(out)
+}
+
+/// `PotionContents.CODEC`: the root effects copied by `customEffects`, then
+/// the optional custom name. Empty tails are the protocol model's default.
+fn potion_contents_tag(
+    potion: Option<i32>,
+    color: Option<i32>,
+    rest: &[u8],
+    builtin: &Builtin,
+) -> Option<Tag> {
+    let potion = potion.and_then(|id| builtin.get("minecraft:potion")?.name(id));
+    let mut entries: Vec<(&str, Tag)> = potion
+        .map(|name| ("potion", Tag::String(name.into())))
+        .into_iter()
+        .chain(color.map(|c| ("custom_color", Tag::Int(c))))
+        .collect();
+    if !rest.is_empty() {
+        let mut r = Reader::new(rest);
+        let count = r.count(r.remaining() / 7).ok()?;
+        let mut effects = Vec::with_capacity(count);
+        for _ in 0..count {
+            effects.push(potion_effect_tag(&mut r, builtin)?);
+        }
+        if !effects.is_empty() {
+            entries.push(("custom_effects", Tag::List(effects)));
+        }
+        if r.bool().ok()? {
+            let name = r.string(32767).ok()?;
+            entries.push(("custom_name", Tag::String(name.as_str().into())));
+        }
+        if r.remaining() != 0 {
+            return None;
+        }
+    }
+    Some(Tag::compound(entries))
+}
+
+/// A root `MobEffectInstance` as its CODEC saves it. The potion's copying
+/// getter drops hidden effects, but their Details still occupy the wire.
+fn potion_effect_tag(r: &mut Reader, builtin: &Builtin) -> Option<Tag> {
+    let id = r.varint().ok()?;
+    let name = builtin.get("minecraft:mob_effect")?.name(id)?;
+    let amplifier = r.varint().ok()?.clamp(0, 255);
+    let duration = r.varint().ok()?;
+    let ambient = r.bool().ok()?;
+    let particles = r.bool().ok()?;
+    let icon = r.bool().ok()?;
+    let mut hidden = r.bool().ok()?;
+    while hidden {
+        r.varint().ok()?;
+        r.varint().ok()?;
+        r.bool().ok()?;
+        r.bool().ok()?;
+        r.bool().ok()?;
+        hidden = r.bool().ok()?;
+    }
+    let mut fields = vec![("id", Tag::String(name.into()))];
+    if amplifier != 0 {
+        // The saved byte is unsigned. Keep large values positive for the
+        // native numeric reader; either numeric tag is accepted by its CODEC.
+        let value = if amplifier <= i8::MAX as i32 {
+            Tag::Byte(amplifier as i8)
+        } else {
+            Tag::Int(amplifier)
+        };
+        fields.push(("amplifier", value));
+    }
+    if duration != 0 {
+        fields.push(("duration", Tag::Int(duration)));
+    }
+    if ambient {
+        fields.push(("ambient", Tag::Byte(1)));
+    }
+    if !particles {
+        fields.push(("show_particles", Tag::Byte(0)));
+    }
+    // Details.MAP_CODEC always encodes the optional icon field when saving.
+    fields.push(("show_icon", Tag::Byte(i8::from(icon))));
+    Some(Tag::compound(fields))
 }
 
 /// An `ItemStackTemplate` as its NBT codec writes it: id, count and components.
@@ -553,6 +633,201 @@ mod tests {
             glider_and_slot(&plain, true, Some("chest".into())),
             (true, Some("chest".into()))
         );
+    }
+
+    fn potion_builtin() -> Builtin {
+        let sparse = |len, id, name: &str| {
+            let mut names = vec![String::new(); len];
+            names[id] = name.to_owned();
+            Ids::from_names(names)
+        };
+        let mut effects = vec![String::new(); 19];
+        effects[0] = "minecraft:speed".into();
+        effects[18] = "minecraft:poison".into();
+        Builtin {
+            registries: [
+                (
+                    "minecraft:item".into(),
+                    sparse(1272, 1271, "minecraft:potion"),
+                ),
+                (
+                    "minecraft:potion".into(),
+                    sparse(26, 25, "minecraft:strong_healing"),
+                ),
+                ("minecraft:mob_effect".into(), Ids::from_names(effects)),
+                (
+                    "minecraft:data_component_type".into(),
+                    sparse(
+                        54,
+                        component::POTION_CONTENTS as usize,
+                        "minecraft:potion_contents",
+                    ),
+                ),
+            ]
+            .into(),
+        }
+    }
+
+    fn potion_stack(rest: Vec<u8>) -> Stack {
+        let mut stack = Stack::new(1271, 1);
+        stack.added.push((
+            component::POTION_CONTENTS,
+            Component::Potion {
+                potion: None,
+                color: None,
+                rest,
+            },
+        ));
+        stack
+    }
+
+    fn poison_component() -> Tag {
+        Tag::compound([
+            ("id", Tag::String("minecraft:poison".into())),
+            ("amplifier", Tag::Byte(2)),
+            ("duration", Tag::Int(40)),
+            ("ambient", Tag::Byte(1)),
+            ("show_particles", Tag::Byte(0)),
+            ("show_icon", Tag::Byte(0)),
+        ])
+    }
+
+    #[test]
+    fn vanilla_potion_effects_reach_native_item_data_and_saved_components() {
+        use horizon_protocol::item::Slot;
+        // Actual current vanilla ItemStack.OPTIONAL_STREAM_CODEC output after
+        // upgrading a 1.20/1.20.1 potion with CustomPotionEffects, Id=19.
+        let bytes = [
+            0x01, 0xf7, 0x09, 0x01, 0x00, 0x35, 0x01, 0x19, 0x01, 0x00, 0x01, 0xe2, 0x40, 0x01,
+            0x12, 0x02, 0x28, 0x01, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let mut r = Reader::new(&bytes);
+        let stack = Slot::read(&mut r).unwrap().unwrap();
+        assert_eq!(r.remaining(), 0);
+        let builtin = potion_builtin();
+        let native = from_network(&stack, &builtin, &Dynamic::default());
+        assert_eq!(native.item.as_ref(), "minecraft:potion");
+        assert_eq!(native.potion(), Some("minecraft:strong_healing"));
+        assert_eq!(
+            native.custom_potion_effects(),
+            vec![("minecraft:poison".into(), 40, 2)]
+        );
+        let expected = Tag::compound([(
+            "minecraft:potion_contents",
+            Tag::compound([
+                ("potion", Tag::String("minecraft:strong_healing".into())),
+                ("custom_color", Tag::Int(123456)),
+                ("custom_effects", Tag::List(vec![poison_component()])),
+            ]),
+        )]);
+        let encoded = crate::item_data::encode_components(&native).unwrap();
+        assert_eq!(encoded, expected);
+        // The native save/load boundary retains the full effect flags too.
+        let (damage, data) = crate::item_data::decode_components(Some(&encoded));
+        let mut saved = ItemStack::new("minecraft:potion", 1);
+        saved.damage = damage;
+        *saved.data_mut() = *data.unwrap();
+        assert_eq!(crate::item_data::encode_components(&saved), Some(expected));
+        assert_eq!(
+            saved.custom_potion_effects(),
+            native.custom_potion_effects()
+        );
+    }
+
+    #[test]
+    fn potion_names_and_defaults_survive_the_native_component_boundary() {
+        let builtin = potion_builtin();
+        for (rest, name) in [
+            (vec![0, 1, 0], ""),
+            (vec![0, 1, 4, b'n', b'a', b'm', b'e'], "name"),
+        ] {
+            let native = from_network(&potion_stack(rest), &builtin, &Dynamic::default());
+            let expected = Tag::compound([(
+                "minecraft:potion_contents",
+                Tag::compound([("custom_name", Tag::String(name.into()))]),
+            )]);
+            assert_eq!(crate::item_data::encode_components(&native), Some(expected));
+            assert_eq!(native.potion(), None);
+        }
+        // Empty/default tails do not need an effect registry or invent a name.
+        for rest in [&[][..], &[0, 0][..]] {
+            assert_eq!(
+                potion_contents_tag(None, None, rest, &Builtin::default()),
+                Some(Tag::Compound(Default::default()))
+            );
+        }
+        // Details defaults omit their fields, except show_icon, whose getter
+        // always returns Some. Constructor bounds keep the native unsigned
+        // amplifier readable even when its canonical byte would be negative.
+        for (amplifier, expected) in [
+            (vec![0xff, 0xff, 0xff, 0xff, 0x0f], 0),
+            (vec![0], 0),
+            (vec![0x80, 0x02], 255),
+        ] {
+            let mut rest = vec![1, 0]; // one speed effect
+            rest.extend(amplifier);
+            rest.extend([0, 0, 1, 1, 0, 0]);
+            let native = from_network(&potion_stack(rest), &builtin, &Dynamic::default());
+            assert_eq!(
+                native.custom_potion_effects(),
+                vec![("minecraft:speed".into(), 0, expected)]
+            );
+            let mut effect = Tag::compound([
+                ("id", Tag::String("minecraft:speed".into())),
+                ("show_icon", Tag::Byte(1)),
+            ]);
+            if expected != 0 {
+                let Tag::Compound(fields) = &mut effect else {
+                    unreachable!();
+                };
+                fields.insert("amplifier".into(), Tag::Int(expected));
+            }
+            assert_eq!(
+                crate::item_data::encode_components(&native),
+                Some(Tag::compound([(
+                    "minecraft:potion_contents",
+                    Tag::compound([("custom_effects", Tag::List(vec![effect]))]),
+                )]))
+            );
+        }
+    }
+
+    #[test]
+    fn potion_hidden_details_are_consumed_at_the_copying_getter_boundary() {
+        // A synthetic wire tail checks field consumption. Normal vanilla
+        // PotionContents writes copies without hidden children; CODEC does too.
+        let rest = vec![
+            1, 18, 2, 40, 1, 0, 0, 1, 1, 80, 0, 1, 1, 0, 1, 4, b'n', b'a', b'm', b'e',
+        ];
+        let native = from_network(&potion_stack(rest), &potion_builtin(), &Dynamic::default());
+        assert_eq!(
+            crate::item_data::encode_components(&native),
+            Some(Tag::compound([(
+                "minecraft:potion_contents",
+                Tag::compound([
+                    ("custom_effects", Tag::List(vec![poison_component()])),
+                    ("custom_name", Tag::String("name".into())),
+                ]),
+            )]))
+        );
+    }
+
+    #[test]
+    fn malformed_potion_tails_do_not_create_partial_native_components() {
+        let builtin = potion_builtin();
+        for rest in [
+            vec![1],
+            vec![1, 18, 2, 40, 1, 0, 0],
+            vec![0, 1, 3, b'n'],
+            vec![0, 0, 0xff],
+            vec![1, 127, 0, 0, 0, 1, 1, 0, 0],
+        ] {
+            assert!(potion_contents_tag(None, None, &rest, &builtin).is_none());
+            let native = from_network(&potion_stack(rest), &builtin, &Dynamic::default());
+            assert!(native.potion().is_none());
+            assert!(native.custom_potion_effects().is_empty());
+            assert!(crate::item_data::encode_components(&native).is_none());
+        }
     }
 
     /// A command's chestplate (`/give @s diamond_chestplate[glider={},

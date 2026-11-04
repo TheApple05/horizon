@@ -2566,6 +2566,8 @@ struct Game<'a> {
     /// Runs of `entity_vertices` by entity, for a shader pack's per-entity draws; recorded only
     /// while `pack_ids` is set (game/shader_packs.rs).
     entity_spans: std::cell::RefCell<Vec<horizon_client::gfx::pack_draw::EntitySpan>>,
+    /// Item submission may also draw GUI previews and hands into other buffers.
+    recording_entity_items: bool,
     /// Which entity this frame's entity vertices belong to (`Frame::entity_motion`).
     entity_motion: std::cell::RefCell<Vec<(u32, u64)>>,
     /// Mob models posed on the GPU (`Frame::skin`, `mobs::skin`): the models stored there,
@@ -11059,6 +11061,7 @@ impl Game<'_> {
         let mut visible_static_block_entity_sections = Vec::new();
         let mut static_block_entity_stats = StaticCacheFrameStats::default();
         self.entity_spans.borrow_mut().clear();
+        self.recording_entity_items = true;
         self.entity_motion.borrow_mut().clear();
         // LevelExtractor.extract: the transient blocks queued since the last frame.
         self.drain_transient_block_queue();
@@ -11658,6 +11661,7 @@ impl Game<'_> {
         laps.lap("eg_cracks");
         self.finish_async_entity_culling();
         laps.lap("eg_culling_finish");
+        self.recording_entity_items = false;
         (
             out,
             static_block_entities,
@@ -14226,12 +14230,17 @@ impl Game<'_> {
         horizon_client::mobs::render_model(arm, m, &pose, [r.u0, r.v0, r.u1, r.v1], light, 0, out);
     }
     /// FirstPersonHandsAndItemsRenderer: the right arm or the held items of
-    /// both hands in view space, converted to camera-relative world space,
-    /// and where the arm and each item start, with the `currentRenderedItemId`
-    /// a shader pack reads for them.
-    fn hand_geometry(&mut self, alpha: f64) -> (Vec<Vertex>, Vec<(u32, i32)>) {
+    /// both hands in view space, converted to camera-relative world space.
+    fn hand_geometry(
+        &mut self,
+        alpha: f64,
+    ) -> (Vec<Vertex>, Vec<horizon_client::gfx::pack_draw::EntitySpan>) {
         let mut out = Vec::new();
-        let mut runs = Vec::new();
+        use horizon_client::gfx::pack_draw::EntitySpan;
+        let mut spans = vec![EntitySpan {
+            stage: horizon_shaders::render_stage("HAND_SOLID"),
+            ..Default::default()
+        }];
         // GameRenderer.renderItemInHand: F1 hides the hand with the HUD.
         if self.spectator()
             || self.ui.hide_gui
@@ -14243,7 +14252,7 @@ impl Game<'_> {
                 .is_none_or(|p| p.health.dead_or_dying())
             || self.screen == Screen::Dead
         {
-            return (out, runs);
+            return (out, spans);
         }
         let a = alpha as f32;
         // FirstPersonHandsAndItemsRenderer: the swing goes to the hand that
@@ -14335,7 +14344,6 @@ impl Game<'_> {
                 // renderPlayerArm
                 let m = to_world
                     * horizon_client::first_person::player_arm_pose(left, inverse_height, attack);
-                runs.push((out.len() as u32, 0));
                 self.first_person_arm(left, m, packed, &mut out);
                 continue;
             };
@@ -14346,13 +14354,12 @@ impl Game<'_> {
                 // renderOneHandedMap and renderTwoHandedMap: the arms under
                 // the map, unless the player is invisible.
                 if !self.own_invisible() {
-                    runs.push((out.len() as u32, 0));
                     for (arm, pose) in map_arm_poses(hold, left, self.pitch, inverse_height, attack)
                     {
                         self.first_person_arm(arm, to_world * pose, packed, &mut out);
                     }
                 }
-                runs.push((out.len() as u32, item_id));
+                let previous = EntitySpan::item(&mut spans, out.len() as u32, item_id);
                 match hold {
                     MapHold::TwoHanded => self.two_handed_map_geometry(
                         to_world,
@@ -14369,6 +14376,7 @@ impl Game<'_> {
                         &mut out,
                     ),
                 }
+                EntitySpan::restore(&mut spans, out.len() as u32, previous);
                 continue;
             }
             let mut owner = self.player_owner(Some(&stack));
@@ -14463,7 +14471,11 @@ impl Game<'_> {
                 horizon_client::cit::Hand::Main
             };
             let state = self.resolve_item_in_hand(&stack, context, Some(&owner), seed, cit_hand);
-            runs.push((out.len() as u32, item_id));
+            let previous = EntitySpan::item(
+                &mut spans,
+                out.len() as u32,
+                state.shader_item_id.unwrap_or(item_id),
+            );
             let light = self.world.light(
                 eye[0].floor() as i32,
                 eye[1].floor() as i32,
@@ -14475,6 +14487,7 @@ impl Game<'_> {
                 block_entity_render::vertex_light(light),
                 &mut out,
             );
+            EntitySpan::restore(&mut spans, out.len() as u32, previous);
         }
         // The hand has its own submit storage, which never uses improved
         // transparency (`LevelRenderer` alone calls `setUseImprovedTransparency`):
@@ -14482,7 +14495,7 @@ impl Game<'_> {
         for vertex in &mut out {
             vertex.layer &= !horizon_client::gfx::OIT_ENTITY;
         }
-        (out, runs)
+        (out, spans)
     }
     /// The renderer for the window, with the current block sprites, GUI
     /// atlas and world border texture.
@@ -16228,8 +16241,8 @@ impl Game<'_> {
         } else {
             (Vec::new(), None)
         };
-        let (mut hand, hand_items) = if title || self.scoping() {
-            Default::default()
+        let (mut hand, hand_spans) = if title || self.scoping() {
+            (Vec::new(), Vec::new())
         } else {
             self.hand_geometry(camera_alpha)
         };
@@ -16386,7 +16399,7 @@ impl Game<'_> {
             },
             stars: stars.filter(|_| self.settings.horizon.sky || title),
             hand: &hand,
-            hand_items: &hand_items,
+            hand_spans: &hand_spans,
             hand_fov_degrees: self.hud_fov_degrees(camera_alpha as f32, camera.to_array()),
             screen: &screen,
             pack: pack_inputs,
@@ -19199,6 +19212,7 @@ impl<'a> Game<'a> {
             see_through_vertices: Vec::new(),
             shadow_only_vertices: Default::default(),
             entity_spans: Default::default(),
+            recording_entity_items: false,
             entity_motion: Default::default(),
             skin_models: Default::default(),
             skin_frame: Default::default(),
@@ -19912,13 +19926,27 @@ impl Game<'_> {
         );
         (!Arc::ptr_eq(&table, self.res.biomes())).then_some(table)
     }
-    /// What the chunk and far-terrain workers mesh with: the pack's context,
-    /// over the world's biomes when it has its own.
-    fn worker_context(&self) -> Arc<WorkerContext> {
+    /// Resource context before any connection-local lighting policy.
+    fn base_worker_context(&self) -> Arc<WorkerContext> {
         match &self.world_biomes {
             Some(table) => self.pack.context_with(table.clone()),
             None => self.pack.context.clone(),
         }
+    }
+    /// What chunk and far-terrain workers mesh with, including this remote
+    /// connection's validated legacy light table. The resource Arc stays shared.
+    fn worker_context(&self) -> Arc<WorkerContext> {
+        let context = self.base_worker_context();
+        let Some(light) = self.remote.as_ref().and_then(|r| r.legacy_light.as_ref()) else {
+            return context;
+        };
+        Arc::new(WorkerContext {
+            assets: context.assets.clone(),
+            render: context.render.clone(),
+            tables: context.tables.clone(),
+            biomes: context.biomes.clone(),
+            light: light.clone(),
+        })
     }
     fn pack_files(&self) -> horizon_world::loot::PackOverlay<'_> {
         pack_files(&self.world_tables)
@@ -21082,7 +21110,7 @@ fn loading_frame(hud: &HudBatch) -> Frame<'_> {
         celestial: &[],
         stars: None,
         hand: &[],
-        hand_items: &[],
+        hand_spans: &[],
         hand_fov_degrees: 70.0,
         screen: &[],
         pack: Default::default(),

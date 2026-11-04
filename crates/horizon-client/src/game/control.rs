@@ -151,6 +151,19 @@ impl Game<'_> {
     /// The frame summary, with Horizon's own passes' median GPU times while they are timed.
     fn summary_with_passes(&self) -> Value {
         let mut summary = self.frame_stats.summary();
+        let shaders = self
+            .renderer
+            .as_ref()
+            .map(|r| r.shader_pass_times())
+            .unwrap_or_default();
+        if !shaders.is_empty() {
+            summary["shader_passes"] = Value::Object(
+                shaders
+                    .into_iter()
+                    .map(|(name, ms)| (name, json!(ms)))
+                    .collect(),
+            );
+        }
         let passes = self
             .renderer
             .as_ref()
@@ -772,6 +785,20 @@ impl Game<'_> {
             }
             "give" => {
                 self.require_world()?;
+                if self.remote.as_ref().is_some_and(|r| {
+                    r.menu.is_some()
+                        && r.session.server_version()
+                            == horizon_protocol::adapter::ServerVersion::V1_8_9
+                }) {
+                    return Err(
+                        "Close the server inventory before using give on this connection".into(),
+                    );
+                }
+                if self.is_legacy47() && !self.creative {
+                    return Err(
+                        "Creative inventory edits require creative mode on this connection".into(),
+                    );
+                }
                 let name = arg(1)?;
                 let item = if name.contains(':') {
                     name.to_owned()
@@ -792,6 +819,7 @@ impl Game<'_> {
                         .ok_or(super::integrated::NO_ANSWER)?;
                     return Ok(Some(json!({ "ok": true, "given": count })));
                 }
+                let legacy_before = self.is_legacy47().then(|| self.creative_stacks());
                 let max = info.max_stack;
                 let mut given = 0;
                 // Stop once the inventory is full.
@@ -809,6 +837,12 @@ impl Game<'_> {
                     if rest > 0 {
                         break;
                     }
+                }
+                if legacy_before
+                    .as_ref()
+                    .is_some_and(|before| !self.send_creative_edits(before))
+                {
+                    return Err("This item cannot be represented on this connection".into());
                 }
                 Ok(Some(json!({ "ok": true, "given": given })))
             }

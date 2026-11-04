@@ -1926,6 +1926,19 @@ impl PackPost {
         let shadow_config = post.config.shadow.clone();
         // shadowcolor2 to 7 only for a pack that names `HIGHER_SHADOWCOLOR`.
         let shadow_colors = (1u16 << post.shadow_colors) - 1;
+        let smoothing_config =
+            if std::env::var("HORIZON_SHADER_IRIS_1_11_7").is_ok_and(|value| value == "1") {
+                let smoothing = post.config.iris_1_11_7_smoothing;
+                log::info!(
+                    "shader pack: limited Iris 1.11.7 wetness smoothing profile active \
+                 (wetting {}, drying {} raw units)",
+                    smoothing.wetness_halflife,
+                    smoothing.dryness_halflife,
+                );
+                smoothing
+            } else {
+                post.config.smoothing
+            };
         let mut custom = post.custom;
         let custom_names: Vec<String> = custom.uniforms().map(|u| u.0.to_owned()).collect();
         // A first run finds the names neither the frame nor the pack defines.
@@ -2255,7 +2268,7 @@ impl PackPost {
         let weather_geometry = world.weather.then(|| Geometry {
             buffers: &entity_buffers,
             table: None,
-            depth_write: true,
+            depth_write: post.rain_depth,
             atlas: None,
             material_maps: false,
             ids: None,
@@ -2408,7 +2421,7 @@ impl PackPost {
         };
         let reads_depth2 = reads_depth(Source::Depth2);
         // Without a shader hand, depth1 also serves depth2: both exclude only translucency.
-        let depth1 = (water.is_some() || hand.is_some())
+        let depth1 = (water.is_some() || hand.is_some() || (weather.is_some() && post.rain_depth))
             && (reads_depth(Source::Depth1) || (hand.is_none() && reads_depth2));
         let depth2 = hand.is_some() && reads_depth2;
         let every_pass = || {
@@ -2780,6 +2793,7 @@ impl PackPost {
                 let mut u = FrameUniforms::default();
                 u.atlas = world.atlas.map_or([0; 2], |a| a.1);
                 u.shadow = shadow_config;
+                u.smoothing = smoothing_config;
                 u
             },
             shadow_cache: Default::default(),
@@ -3551,7 +3565,7 @@ impl PackPost {
             size[0] as f32 / size[1].max(1) as f32,
             frame.depth_far,
         ) * unspin;
-        geometry.prepare(device, queue, frame.hand, frame.hand_items, projection);
+        geometry.prepare(device, queue, frame.hand, frame.hand_spans, projection);
         if geometry.quads > 0 {
             let group = self.bind(device, queue, encoder, &mut pass, size);
             {
@@ -3566,12 +3580,11 @@ impl PackPost {
                 rp.set_bind_group(1, &geometry.group, &[]);
                 rp.set_vertex_buffer(0, geometry.vertices());
                 rp.set_index_buffer(geometry.indices.slice(..), wgpu::IndexFormat::Uint32);
-                // The arm and each held item: their own `currentRenderedItemId`.
-                for &(first, quads, offset) in &geometry.runs {
+                for (range, offset) in &geometry.draws {
                     if pass.draw {
-                        rp.set_bind_group(2, &geometry.slot_group, &[offset]);
+                        rp.set_bind_group(2, &geometry.draw_group, &[*offset]);
                     }
-                    rp.draw_indexed(first * 6..(first + quads) * 6, 0, 0..1);
+                    rp.draw_indexed(0..(range.len() as u32 / 4) * 6, range.start as i32, 0..1);
                 }
             }
             self.mips_valid &= !pass.written;

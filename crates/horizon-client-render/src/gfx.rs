@@ -945,9 +945,8 @@ pub struct Frame<'a> {
     pub stars: Option<(Mat4, f32)>,
     /// First-person hand and held item, drawn after clearing depth.
     pub hand: &'a [Vertex],
-    /// Where the arm and each held item start in `hand` (first vertex), with the
-    /// `currentRenderedItemId` a shader pack's `gbuffers_hand` reads for them.
-    pub hand_items: &'a [(u32, i32)],
+    /// Per-item and arm runs in the first-person geometry, for shader uniforms.
+    pub hand_spans: &'a [pack_draw::EntitySpan],
     /// `CameraRenderState.hudFov`: the hand's own field of view
     /// (`GameRenderer.render3dHud`).
     pub hand_fov_degrees: f32,
@@ -7426,6 +7425,7 @@ impl Renderer {
         // Decided before the walk, so that a pass whose buffers no longer fit can still
         // switch GPU culling off.
         let radius = (frame.detail_distance / 16.0) as i32;
+        let level_sections = self.layout.sections() as i32;
         let mut gpu_frame = self.gpu_culling.is_some()
             && !frame.title
             && !pack_terrain
@@ -7488,7 +7488,14 @@ impl Renderer {
                 camera,
                 radius,
                 &Frusta(view, mirror),
-                |k| !culling || reachable.contains(k),
+                |k| {
+                    resident::section_y_in_view_distance(
+                        k.1,
+                        camera_section.1,
+                        radius,
+                        level_sections,
+                    ) && (!culling || reachable.contains(k))
+                },
                 |x, z| {
                     (!cutout.is_empty() && cutout.contains(&(x, z)))
                         || (!leaving.is_empty() && leaving.contains(&(x, z)))
@@ -12428,7 +12435,11 @@ mod tests {
         if std::env::var_os("WGPU_VALIDATION_INDIRECT_CALL").is_none()
             && std::env::var_os("WGPU_BACKEND").is_none()
         {
-            assert_eq!(validated(wgpu::Backends::default()), cfg!(debug_assertions));
+            // The default mask includes the DirectX 12 fallback on Windows.
+            assert_eq!(
+                validated(wgpu::Backends::default()),
+                cfg!(debug_assertions) || cfg!(windows)
+            );
             assert_eq!(validated(wgpu::Backends::VULKAN), cfg!(debug_assertions));
             assert_eq!(
                 validated(wgpu::Backends::DX12),

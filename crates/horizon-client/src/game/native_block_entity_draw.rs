@@ -430,6 +430,9 @@ impl Game<'_> {
         let now = self.world.game_time;
         let mut kept = self.kept_block_entities.borrow_mut();
         kept.sweep(now);
+        // Kept geometry stores vertices, not per-item draw identities. Re-submit
+        // with a compatibility pack so native_draw_item records its spans again.
+        let allow_kept = self.pack_ids.is_none();
         for &(pos, state) in blocks {
             let corner = DVec3::new(f64::from(pos[0]), f64::from(pos[1]), f64::from(pos[2]));
             // Vec3.closerThan: strictly closer.
@@ -448,7 +451,7 @@ impl Game<'_> {
                 state,
                 light,
             };
-            if let Some(entry) = kept.get(pos, key, entity.revision(), now) {
+            if allow_kept && let Some(entry) = kept.get(pos, key, entity.revision(), now) {
                 if in_frustum(self.view_frustum.as_ref(), origin, entry.bounds) {
                     let start = draw.vertices.len();
                     self.mark_block_entity(start, state);
@@ -494,7 +497,7 @@ impl Game<'_> {
                 .drain(..)
                 .map(|(at, spin)| (at.saturating_sub(start), spin))
                 .collect();
-            if draw.kept {
+            if draw.kept && allow_kept {
                 kept.keep(
                     pos,
                     key,

@@ -113,6 +113,12 @@ fn projectile_kind(kind: &str) -> Option<ProjectileKind> {
 /// tracker's updates (10 to 20 ticks apart) with its own gravity and drag,
 /// and a block stops it there; only the server decides what it hits.
 pub(super) fn remote_projectile_tick(p: &mut Projectile, w: &impl ProjectileWorld) {
+    if p.legacy47_acceleration.is_some() {
+        // Vanilla47 fireball onImpact does nothing on clients; authoritative server removal decides the hit.
+        p.tick_through(w);
+        return;
+    }
+
     if !matches!(p.tick(w).1, Hit::None) {
         p.velocity = Vec3::ZERO;
     }
@@ -1015,4 +1021,17 @@ mod tests {
         remote_projectile_item(&mut list, 14, ItemStack::new("minecraft:diamond", 1));
         assert_eq!(list[2].item, None);
     }
+}
+
+/// Root must call this immediately after a protocol47 AddEntity, before the first client tick.
+/// Only trusted adapter-owned extras should use this hook; it is not a server packet opcode.
+pub(super) fn remote_legacy47_fireball_acceleration(
+    projectiles: &mut [Projectile],
+    id: i32,
+    wire: [f64; 3],
+) -> bool {
+    projectiles
+        .iter_mut()
+        .find(|p| p.id == id as u32)
+        .is_some_and(|p| p.set_legacy47_acceleration(wire))
 }

@@ -6871,15 +6871,8 @@ impl Game<'_> {
                     );
                 }
             }
-            out.truncate(len - 2);
-            // The temporary bounds are not real geometry. Keep the culling end marker
-            // at the true CPU end before the next entity appends a span there.
-            for span in self.entity_spans.borrow_mut().iter_mut().rev() {
-                if span.start as usize <= out.len() {
-                    break;
-                }
-                span.start = out.len() as u32;
-            }
+            // Bounds are not real geometry, and their markers must not outlive them.
+            self.truncate_entity_vertices(out, len - 2);
         }
     }
 
@@ -7006,7 +6999,7 @@ impl Game<'_> {
                 if let Some(rgb) = outline {
                     self.mark_outline(&out[entity_start..], rgb);
                     if mob.invisible {
-                        out.truncate(entity_start);
+                        self.truncate_entity_vertices(out, entity_start);
                         continue;
                     }
                 }
@@ -7148,7 +7141,7 @@ impl Game<'_> {
                     self.skin_frame.borrow_mut().outline_since(first, color);
                 }
                 if mob.invisible {
-                    out.truncate(entity_start);
+                    self.truncate_entity_vertices(out, entity_start);
                     continue;
                 }
             }
