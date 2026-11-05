@@ -36,6 +36,9 @@ impl<C: PlacementContext> PlacementContext for Queries<'_, C> {
     fn top_feature(&self) -> Option<FeatureIdentity> {
         self.top
     }
+    fn noise_biome_is(&mut self, quart: [i32; 3], name: &str) -> Result<bool, PlacementQueryError> {
+        self.world.noise_biome_is(quart, name)
+    }
     fn biome_allows_feature(
         &mut self,
         p: [i32; 3],
