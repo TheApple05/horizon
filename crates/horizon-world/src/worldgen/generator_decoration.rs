@@ -169,6 +169,14 @@ impl Decoration {
         source: &ResolvedBiomeSource,
         flat: Option<FlatDecoration>,
     ) -> Result<Option<Self>, GeneratorError> {
+        Self::new_with_decoder(data, source, flat, None)
+    }
+    pub(super) fn new_with_decoder(
+        data: &Arc<GeneratorData>,
+        source: &ResolvedBiomeSource,
+        flat: Option<FlatDecoration>,
+        decoder: Option<Arc<dyn super::external_feature::ExternalFeatureDecoder>>,
+    ) -> Result<Option<Self>, GeneratorError> {
         let Some(resources) = &data.feature_resources else {
             return Ok(None);
         };
@@ -192,6 +200,9 @@ impl Decoration {
             .feature_block_bindings()?
             .with_fluid_tags(&resources.fluid_tags)?
             .with_biomes(biomes.clone());
+        if let Some(decoder) = decoder {
+            bindings = bindings.with_external_decoder(decoder);
+        }
         if let Some(structures) = &data.structures {
             bindings = bindings.with_structures(structures.clone());
         }

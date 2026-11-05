@@ -3,6 +3,18 @@
 use super::placement::{PlacementContext, PlacementQueryError};
 use crate::{fluid::FluidState, heightmap::HeightmapType, registry::BlockStateId};
 
+/// Retained by one world's block bindings, including later lazy catalog reads.
+/// Returning None leaves the type to the ordinary decoder. Minecraft types
+/// always retain the built-in decoder's priority.
+pub trait ExternalFeatureDecoder: std::fmt::Debug + Send + Sync {
+    fn decode(
+        &self,
+        kind: &str,
+        json: &str,
+        blocks: &super::block_feature::FeatureBlockBindings<'_>,
+    ) -> Option<Result<std::sync::Arc<dyn ExternalFeature>, super::DecodeError>>;
+}
+
 pub trait ExternalFeature: std::fmt::Debug + Send + Sync {
     fn place(
         &self,

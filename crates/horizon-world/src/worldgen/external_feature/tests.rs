@@ -1,4 +1,4 @@
-use super::{ExternalFeature, ExternalFeatureWorld};
+use super::{ExternalFeature, ExternalFeatureDecoder, ExternalFeatureWorld};
 use crate::{
     heightmap::HeightmapType,
     registry::BlockStateId,
@@ -10,7 +10,10 @@ use crate::{
     },
 };
 use horizon_core::random::{LegacyRandom, RandomSource};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 struct World {
     blocks: BTreeMap<[i32; 3], BlockStateId>,
@@ -162,4 +165,139 @@ fn native_feature_owners_follow_the_last_graph_clone() {
     assert!(weak.upgrade().is_some());
     drop(retained);
     assert!(weak.upgrade().is_none());
+}
+
+#[derive(Debug)]
+struct Paint(Arc<u8>);
+impl ExternalFeature for Paint {
+    fn place(
+        &self,
+        world: &mut dyn ExternalFeatureWorld,
+        origin: [i32; 3],
+    ) -> Result<bool, PlacementQueryError> {
+        world.set_chunk_block(origin, BlockStateId(u32::from(*self.0)))?;
+        Ok(true)
+    }
+}
+#[derive(Debug)]
+struct Decoder(Arc<u8>);
+impl ExternalFeatureDecoder for Decoder {
+    fn decode(
+        &self,
+        kind: &str,
+        _: &str,
+        _: &crate::worldgen::block_feature::FeatureBlockBindings<'_>,
+    ) -> Option<Result<Arc<dyn ExternalFeature>, crate::worldgen::DecodeError>> {
+        assert!(
+            !kind.starts_with("minecraft:"),
+            "built-in decoder priority was lost"
+        );
+        match kind {
+            "example:paint" => Some(Ok(Arc::new(Paint(self.0.clone())))),
+            "example:broken" => Some(Err(crate::worldgen::DecodeError::Field(
+                "invalid native configuration",
+            ))),
+            _ => None,
+        }
+    }
+}
+fn registry() -> crate::registry::BlockRegistry {
+    use crate::nbt::Tag;
+    let names = [
+        "minecraft:air",
+        "minecraft:cave_air",
+        "minecraft:void_air",
+        "minecraft:stone",
+    ];
+    crate::registry::BlockRegistry::from_nbt(&Tag::compound([
+        ("DataVersion", Tag::Int(crate::DATA_VERSION)),
+        (
+            "states",
+            Tag::List(
+                names
+                    .iter()
+                    .map(|name| Tag::compound([("id", Tag::String((*name).into()))]))
+                    .collect(),
+            ),
+        ),
+        (
+            "defaults",
+            Tag::Compound(
+                names
+                    .iter()
+                    .enumerate()
+                    .map(|(i, name)| ((*name).into(), Tag::Int(i as i32)))
+                    .collect(),
+            ),
+        ),
+    ]))
+    .unwrap()
+}
+
+#[test]
+fn lazy_catalog_decodes_keep_their_own_world_binding_and_release_owners() {
+    use crate::worldgen::{
+        block_feature::FeatureBlockBindings, feature_catalog::FeatureCatalog, tags::TagDefinitions,
+    };
+    let registry = registry();
+    let owner = Arc::new(5_u8);
+    let weak = Arc::downgrade(&owner);
+    let bindings = FeatureBlockBindings::new(&registry, BTreeSet::new())
+        .unwrap()
+        .with_external_decoder(Arc::new(Decoder(owner)));
+    let other = FeatureBlockBindings::new(&registry, BTreeSet::new())
+        .unwrap()
+        .with_external_decoder(Arc::new(Decoder(Arc::new(9))));
+    let catalog = FeatureCatalog::from_resources(
+        &BTreeMap::from([("example:paint".into(), r#"{"type":"example:paint"}"#.into())]),
+        &BTreeMap::from([(
+            "example:root".into(),
+            r#"{"feature":"example:paint","placement":[]}"#.into(),
+        )]),
+        &TagDefinitions::default(),
+    )
+    .unwrap();
+    let first = catalog
+        .placed_feature_with_blocks(r#""example:root""#, &bindings)
+        .unwrap();
+    let second = catalog
+        .placed_feature_with_blocks(r#""example:root""#, &other)
+        .unwrap();
+    drop(bindings);
+    assert!(weak.upgrade().is_some());
+    let mut a = World::new();
+    let mut b = World::new();
+    first
+        .place(&mut a, &mut LegacyRandom::new(0), [0, 0, 0], blocks())
+        .unwrap();
+    second
+        .place(&mut b, &mut LegacyRandom::new(0), [0, 0, 0], blocks())
+        .unwrap();
+    assert_eq!(a.blocks.get(&[0, 0, 0]), Some(&BlockStateId(5)));
+    assert_eq!(b.blocks.get(&[0, 0, 0]), Some(&BlockStateId(9)));
+    drop(first);
+    assert!(weak.upgrade().is_none());
+}
+
+#[test]
+fn decoder_errors_and_unknown_types_remain_errors_and_builtins_keep_priority() {
+    use crate::worldgen::block_feature::FeatureBlockBindings;
+    let registry = registry();
+    let bindings = FeatureBlockBindings::new(&registry, BTreeSet::new())
+        .unwrap()
+        .with_external_decoder(Arc::new(Decoder(Arc::new(5))));
+    assert!(
+        FeatureDefinition::from_json_with_blocks(r#"{"type":"example:broken"}"#, &bindings)
+            .is_err()
+    );
+    assert!(
+        FeatureDefinition::from_json_with_blocks(r#"{"type":"example:unknown"}"#, &bindings)
+            .is_err()
+    );
+    assert!(FeatureDefinition::from_json(r#"{"type":"example:paint"}"#).is_err());
+    assert!(matches!(
+        FeatureDefinition::from_json_with_blocks(r#"{"type":"minecraft:no_op"}"#, &bindings)
+            .unwrap(),
+        FeatureDefinition::NoOp
+    ));
 }
