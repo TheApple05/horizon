@@ -10691,24 +10691,25 @@ impl Game<'_> {
             return;
         }
         let before = self.carried.clone();
-        if !self.menu_click(None, button, input) && input == Input::Pickup {
+        if !self.menu_click(None, button, input)
+            && input == Input::Pickup
+            && let Some(c) = self.carried.as_mut()
+        {
             // A screen the menu engine doesn't model: the same doClick.
-            if let Some(c) = self.carried.as_mut() {
-                let thrown = if right {
-                    let one = ItemStack {
-                        count: 1,
-                        ..c.clone()
-                    };
-                    c.count -= 1;
-                    if c.count == 0 {
-                        self.carried = None;
-                    }
-                    one
-                } else {
-                    self.carried.take().expect("some")
+            let thrown = if right {
+                let one = ItemStack {
+                    count: 1,
+                    ..c.clone()
                 };
-                self.player_drop(thrown);
-            }
+                c.count -= 1;
+                if c.count == 0 {
+                    self.carried = None;
+                }
+                one
+            } else {
+                self.carried.take().expect("some")
+            };
+            self.player_drop(thrown);
         }
         if self.carried != before {
             self.swing_arm();
@@ -13102,15 +13103,16 @@ impl Game<'_> {
                             point,
                         });
                     }
-                } else if !first && !self.res.facts().is_air(state) && f.fluid == Fluid::None {
+                } else if !first
+                    && !self.res.facts().is_air(state)
+                    && f.fluid == Fluid::None
+                    && let Some(hit) =
+                        outline_stop(origin, dir, self.reach(), b, face, || self.outline_boxes(b))
+                {
                     // `ClipContext.Block.OUTLINE`: the ray stops at the block's
                     // outline, not its cell; it passes through the empty part
                     // of a torch, a fence or a flower to the water behind.
-                    if let Some(hit) =
-                        outline_stop(origin, dir, self.reach(), b, face, || self.outline_boxes(b))
-                    {
-                        return Some(hit);
-                    }
+                    return Some(hit);
                 }
                 last = b;
                 first = false;
@@ -17767,14 +17769,15 @@ impl Game<'_> {
                 PhysicalKey::Code(key) => self.screen_key_pressed(key, key_event.repeat),
                 PhysicalKey::Unidentified(_) => false,
             };
-            if self.screen == Screen::Options && self.screen_hooks_open() {
+            if self.screen == Screen::Options
+                && self.screen_hooks_open()
+                && let Some(text) = key_event.text.as_deref()
+            {
                 // The hook after the key's own, then the text the key path
                 // types in place (its own routing keeps it).
-                if let Some(text) = key_event.text.as_deref() {
-                    let left = self.screen_text_typed(text);
-                    if left.as_deref() != Some(text) {
-                        key_event.text = left.map(Into::into);
-                    }
+                let left = self.screen_text_typed(text);
+                if left.as_deref() != Some(text) {
+                    key_event.text = left.map(Into::into);
                 }
             }
             if canceled {
@@ -18948,13 +18951,12 @@ impl Game<'_> {
         if horizon_threads::stop_requests() > 0
             && !self.options.split_guest
             && self.pending_save.as_ref().is_none_or(|save| !save.quit)
+            && let Err(error) = self.begin_closing_save(true)
         {
             // SIGTERM, SIGINT or SIGHUP: the shutdown hook's server halt, as a window close.
-            if let Err(error) = self.begin_closing_save(true) {
-                self.error = Some(error);
-                event_loop.exit();
-                return;
-            }
+            self.error = Some(error);
+            event_loop.exit();
+            return;
         }
         if self.pending_save.is_some() {
             match self.poll_closing_save() {
