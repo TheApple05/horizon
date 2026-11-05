@@ -43,6 +43,12 @@ regressions, original Photon shader tests, exact optimized client/control builds
 offline selector UI plus real loopback handshakes, Photon GPU/dimension acceptance,
 and an actual TerraForged constructor injection/native chunk comparison against
 the independently captured Java prepared-terrain corpus. `fork_terra_gate.py`
+uses the dedicated `TheApple05/TerraForged-Horizon` checkout as `--terra-root`.
+Configure its reviewed full SHA with `--expected-terra-commit`; a moved HEAD or
+dirty gate input fails closed. Review repository updates deliberately and rerun
+the full gate set under the new configuration hash before promotion. Java oracle
+captures remain separate inputs from the Java port; they are not native source.
+The gate records the native repository revision and hashes its input files. It
 retargets copies of the mod and its helpers to the candidate SHA; it does not test
 the old pin while claiming to test the candidate. Runtime binaries are frozen
 after building and identified by SHA-256. Package Python checks also run.

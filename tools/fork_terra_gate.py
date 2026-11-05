@@ -34,11 +34,31 @@ def git(candidate: Path, *args: str) -> str:
     return subprocess.check_output(["git", "-C", str(candidate), *args], text=True).strip()
 
 
+TERRA_SCOPE = ("horizon/horizon-native.json", "horizon/tools/stage.py",
+               "horizon/tools/run_probe.py", "horizon/tests/prepared_probe.rs",
+               "horizon/mixins/terraforged_prepared")
+
+
+def check_terra_revision(terra: Path, expected: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{40}", expected):
+        raise ValueError("Invalid configured TerraForged commit")
+    if Path(git(terra, "rev-parse", "--show-toplevel")).resolve() != terra.resolve():
+        raise ValueError("--terra-root must name the TerraForged Git worktree root")
+    actual = git(terra, "rev-parse", "HEAD")
+    if actual != expected:
+        raise ValueError("TerraForged HEAD changed; review the new revision and rerun all gates")
+    if git(terra, "status", "--porcelain", "--untracked-files=all", "--", *TERRA_SCOPE):
+        raise ValueError("TerraForged gate inputs have uncommitted changes")
+    return actual
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("candidate", "terra-root", "mixins", "resources", "snapshot", "biomes", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--expected-mod-sha256", required=True)
+    parser.add_argument("--expected-terra-commit",
+                        help="Reviewed commit in the dedicated TerraForged-Horizon repository")
     args = parser.parse_args()
     output = args.output.resolve()
     report: dict = {"schema": 1, "status": "running", "runtimeExecuted": False,
@@ -47,6 +67,8 @@ def main() -> int:
     created_output = False
     try:
         candidate, terra = args.candidate.resolve(strict=True), args.terra_root.resolve(strict=True)
+        if args.expected_terra_commit:
+            report["terraRepositoryCommit"] = check_terra_revision(terra, args.expected_terra_commit)
         if Path(git(candidate, "rev-parse", "--show-toplevel")).resolve() != candidate:
             raise ValueError("--candidate must name the Git worktree root")
         if output.exists() or output.is_relative_to(terra):
@@ -90,6 +112,10 @@ def main() -> int:
             destination = project / path.relative_to(terra)
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, destination)
+            if sha(destination) != originals[path]:
+                raise ValueError("TerraForged input changed while copying")
+        if args.expected_terra_commit:
+            check_terra_revision(terra, args.expected_terra_commit)
         for relative in ("horizon/tools/stage.py", "horizon/tools/run_probe.py",
                          "horizon/mixins/terraforged_prepared/horizon-mixin.toml", "horizon/horizon-native.json"):
             path = project / relative
@@ -140,6 +166,8 @@ def main() -> int:
             raise ValueError("Probe did not establish candidate-bound native compatibility")
         if git(candidate, "rev-parse", "HEAD") != head:
             raise ValueError("Candidate HEAD changed during gate")
+        if args.expected_terra_commit:
+            check_terra_revision(terra, args.expected_terra_commit)
         report.update({"status": "passed", "runtimeExecuted": True,
                        "probeReport": str(output / "probe.json"), "blockCount": verdict["blockCount"],
                        "quartBiomeCount": verdict["quartBiomeCount"], "chunkCount": verdict["chunkCount"]})
