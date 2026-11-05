@@ -39,6 +39,12 @@ impl SimplexNoise {
     }
 
     pub fn get2(&self, x: f64, y: f64) -> f32 {
+        self.get2_f64(x, y) as f32
+    }
+
+    /// The unrounded 2D result for native algorithms comparing double values.
+    /// The existing f32 API retains its final narrowing conversion.
+    pub fn get2_f64(&self, x: f64, y: f64) -> f64 {
         let x = x + self.table.offsets[0];
         let y = y + self.table.offsets[1];
         let root3 = 3.0_f64.sqrt();
@@ -65,7 +71,7 @@ impl SimplexNoise {
             [dx - 1.0 + 2.0 * unskew, dy - 1.0 + 2.0 * unskew, 0.0],
             0.5,
         );
-        (70.0 * (first + second + third)) as f32
+        70.0 * (first + second + third)
     }
 
     pub fn get3(&self, x: f64, y: f64, z: f64) -> f32 {
