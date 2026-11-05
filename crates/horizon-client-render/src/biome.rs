@@ -271,7 +271,7 @@ pub fn identifier_order(a: &str, b: &str) -> std::cmp::Ordering {
     split(a).cmp(&split(b))
 }
 impl Biomes {
-    pub fn load(root: &Path) -> Result<Self> {
+    pub fn load(root: &Path) -> Result<Biomes> {
         let maps = Colormaps {
             grass: colormap(root, "grass")?,
             foliage: colormap(root, "foliage")?,

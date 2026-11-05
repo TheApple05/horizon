@@ -3591,3 +3591,10 @@ ordinary placed-feature composition retains the host's modifier order and
 budgets. With no external object bound, vanilla feature decoding and execution
 keep their existing paths. This API supplies no mod biome definitions or feature
 algorithms itself.
+
+Algorithms that compare Minecraft's biome-info noise as a double can call
+`horizon_world::worldgen::biome_temperature::biome_info_noise_f64`. The existing
+float helper retains its narrowing conversion; the double helper exposes the
+unrounded calculation. Neither helper consumes a world's decoration RNG.
+The renderer's `Biomes::load` uses a concrete `Result<Biomes>` return type so a
+native loader hook can name that result outside an inherent `Self` context.
