@@ -193,3 +193,8 @@ impl BiomeTemperature {
 pub fn biome_info_noise(x: f64, z: f64) -> f32 {
     noises().info.get2(x, z)
 }
+
+/// Unrounded fixed biome-information noise for double-valued native rules.
+pub fn biome_info_noise_f64(x: f64, z: f64) -> f64 {
+    noises().info.get2_f64(x, z)
+}

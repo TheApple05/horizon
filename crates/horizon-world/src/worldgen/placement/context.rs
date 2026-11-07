@@ -290,6 +290,15 @@ pub trait PlacementContext {
     ) -> Result<crate::worldgen::biome::BiomeId, PlacementQueryError> {
         Err(PlacementQueryError::Unavailable)
     }
+    /// Compare an exact noise-biome quart with a registry name. This bypasses
+    /// the seed-obfuscated block-biome lookup used by biome_identity.
+    fn noise_biome_is(
+        &mut self,
+        _quart: [i32; 3],
+        _name: &str,
+    ) -> Result<bool, PlacementQueryError> {
+        Err(PlacementQueryError::Unavailable)
+    }
     fn top_feature(&self) -> Option<FeatureIdentity> {
         None
     }

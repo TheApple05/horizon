@@ -3551,3 +3551,56 @@ generator state and caches belong to the constructed world. Supplying the stem
 does not implement a generator: a native mod must also handle its own world
 constructor and resource integration. This API does not change vanilla choices
 when no custom preset is registered.
+
+# Seed-derived native world features
+
+`horizon_world::worldgen::feature_graph::FeatureDefinition::External` retains an
+`Arc<dyn external_feature::ExternalFeature>` in the executable feature graph.
+The object is owned by that world's graph and its clones, never a process-wide
+feature registry. Dropping the last graph releases it. Ordinary JSON decoding
+still rejects unknown feature types; native modules must handle their own bounded
+configuration decoding and bind an external object explicitly. A native source
+module can call `Pipeline::new_with_extensions` with its biome mapper and a
+world-owned `ExternalFeatureDecoder`. The decoder receives the parsed custom
+type, JSON and block bindings after the normal depth/node-budget check. Minecraft
+types always keep built-in priority. A claimed type can return a decode error;
+an unclaimed type keeps the ordinary unknown-type error.
+
+Decoder bindings stay with the world's decoration, including lazy named-feature
+decodes after construction. These worlds bypass the shared source-JSON decoration
+cache so two worlds cannot alias retained native state. No thread-local owner or
+process-wide feature registry is used for later decoding.
+
+`ExternalFeature::place` receives an object-safe `ExternalFeatureWorld` and the
+candidate origin. It can query states, fluids, tags, heightmaps, world bounds,
+sea level, world seed and exact noise-biome quarts. Quart coordinates are already
+in biome units; `noise_biome_is` compares a canonical registry name without the
+fuzzy, seed-obfuscated block-biome lookup. Unavailable chunks/biomes and query
+errors propagate through the feature execution error, rather than becoming
+successful no-ops.
+
+The caller still applies the engine's ordinary decoration failure policy.
+Root placement errors increment the failed-feature count and can allow generation
+to continue; lazy named-feature decode errors can produce an absent feature.
+Returning an external error therefore does not guarantee that loading the entire
+world fails. Check generation diagnostics when qualifying a native feature pack.
+
+Writes use `set_chunk_block`, retaining generation-chunk heightmap updates and
+avoiding live neighbor/block-entity notifications. As with vanilla features,
+an error after an earlier write does not roll back that write. Native algorithms
+must bound their own loops and writes to the valid generation region.
+
+This interface exposes no decoration random stream. It supports algorithms with
+their own seed-derived noise or random state; an algorithm that consumes vanilla
+feature randomness needs a separate interface. Nesting an external feature in
+ordinary placed-feature composition retains the host's modifier order and
+budgets. With no external object bound, vanilla feature decoding and execution
+keep their existing paths. This API supplies no mod biome definitions or feature
+algorithms itself.
+
+Algorithms that compare Minecraft's biome-info noise as a double can call
+`horizon_world::worldgen::biome_temperature::biome_info_noise_f64`. The existing
+float helper retains its narrowing conversion; the double helper exposes the
+unrounded calculation. Neither helper consumes a world's decoration RNG.
+The renderer's `Biomes::load` uses a concrete `Result<Biomes>` return type so a
+native loader hook can name that result outside an inherent `Self` context.

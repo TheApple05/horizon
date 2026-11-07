@@ -1072,12 +1072,35 @@ where
     fn new_with_biome_mapper(
         data: Arc<GeneratorData>,
         seed: i64,
+        random: R,
+        generator: &Value,
+        settings_json: &Value,
+        with_structures: bool,
+        level: Option<(i32, i32)>,
+        biome_mapper: Option<Arc<dyn super::biome_source::BiomeMapper>>,
+    ) -> Result<Self, GeneratorError> {
+        Self::new_with_extensions(
+            data,
+            seed,
+            random,
+            generator,
+            settings_json,
+            with_structures,
+            level,
+            biome_mapper,
+            None,
+        )
+    }
+    fn new_with_extensions(
+        data: Arc<GeneratorData>,
+        seed: i64,
         mut random: R,
         generator: &Value,
         settings_json: &Value,
         with_structures: bool,
         level: Option<(i32, i32)>,
         biome_mapper: Option<Arc<dyn super::biome_source::BiomeMapper>>,
+        decoder: Option<Arc<dyn super::external_feature::ExternalFeatureDecoder>>,
     ) -> Result<Self, GeneratorError> {
         let registry = data.registry;
         let noise = &settings_json["noise"];
@@ -1279,9 +1302,21 @@ where
             spawn_position: std::sync::OnceLock::new(),
             flat: None,
         };
-        pipeline.decoration = pipeline
-            .data
-            .decoration_for(&source_json, &pipeline.source)?;
+        pipeline.decoration = if let Some(decoder) = decoder {
+            // The same source JSON can have another world's decoder/owners.
+            // Retain these bindings locally, including lazy named features.
+            super::generator_decoration::Decoration::new_with_decoder(
+                &pipeline.data,
+                &pipeline.source,
+                None,
+                Some(decoder),
+            )?
+            .map(Arc::new)
+        } else {
+            pipeline
+                .data
+                .decoration_for(&source_json, &pipeline.source)?
+        };
         if with_structures {
             let possible = pipeline
                 .source
@@ -4361,6 +4396,94 @@ mod tests {
             crate::level::data::load_registry(&root).expect("registry"),
         ));
         Some(GeneratorData::load(&root.join("worldgen"), registry).expect("worldgen data"))
+    }
+
+    #[test]
+    #[ignore = "requires the player's prepared 26.3 resources via HORIZON_RESOURCES"]
+    fn external_decoders_do_not_alias_preloaded_decoration_or_retain_worlds() {
+        use super::super::external_feature::{ExternalFeature, ExternalFeatureDecoder};
+        #[derive(Debug)]
+        struct Decoder;
+        impl ExternalFeatureDecoder for Decoder {
+            fn decode(
+                &self,
+                _: &str,
+                _: &str,
+                _: &super::super::block_feature::FeatureBlockBindings<'_>,
+            ) -> Option<Result<Arc<dyn ExternalFeature>, super::super::DecodeError>> {
+                None
+            }
+        }
+        let data = prepared_data().expect("prepared resource input required");
+        let normal: Value = serde_json::from_str(&data.world_presets["minecraft:normal"]).unwrap();
+        let generator = &normal["dimensions"]["minecraft:overworld"]["generator"];
+        let settings: Value =
+            serde_json::from_str(&data.settings[generator["settings"].as_str().unwrap()]).unwrap();
+        let baseline = Pipeline::new(
+            data.clone(),
+            1,
+            XoroshiroRandom::new(1),
+            generator,
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        let decoder = Arc::new(Decoder);
+        let first_owner = Arc::downgrade(&decoder);
+        let first = Pipeline::new_with_extensions(
+            data.clone(),
+            1,
+            XoroshiroRandom::new(1),
+            generator,
+            &settings,
+            false,
+            None,
+            None,
+            Some(decoder),
+        )
+        .unwrap();
+        let decoder = Arc::new(Decoder);
+        let second_owner = Arc::downgrade(&decoder);
+        let second = Pipeline::new_with_extensions(
+            data.clone(),
+            2,
+            XoroshiroRandom::new(2),
+            generator,
+            &settings,
+            false,
+            None,
+            None,
+            Some(decoder),
+        )
+        .unwrap();
+        assert!(!Arc::ptr_eq(
+            first.decoration.as_ref().unwrap(),
+            baseline.decoration.as_ref().unwrap()
+        ));
+        assert!(!Arc::ptr_eq(
+            first.decoration.as_ref().unwrap(),
+            second.decoration.as_ref().unwrap()
+        ));
+        drop(first);
+        assert!(first_owner.upgrade().is_none());
+        assert!(second_owner.upgrade().is_some());
+        drop(second);
+        assert!(second_owner.upgrade().is_none());
+        let after = Pipeline::new(
+            data,
+            3,
+            XoroshiroRandom::new(3),
+            generator,
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(
+            after.decoration.as_ref().unwrap(),
+            baseline.decoration.as_ref().unwrap()
+        ));
     }
 
     /// A superflat world decorates with what `adjustGenerationSettings` keeps of its biome
