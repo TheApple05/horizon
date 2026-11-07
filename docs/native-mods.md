@@ -3579,6 +3579,12 @@ fuzzy, seed-obfuscated block-biome lookup. Unavailable chunks/biomes and query
 errors propagate through the feature execution error, rather than becoming
 successful no-ops.
 
+The caller still applies the engine's ordinary decoration failure policy.
+Root placement errors increment the failed-feature count and can allow generation
+to continue; lazy named-feature decode errors can produce an absent feature.
+Returning an external error therefore does not guarantee that loading the entire
+world fails. Check generation diagnostics when qualifying a native feature pack.
+
 Writes use `set_chunk_block`, retaining generation-chunk heightmap updates and
 avoiding live neighbor/block-entity notifications. As with vanilla features,
 an error after an earlier write does not roll back that write. Native algorithms
