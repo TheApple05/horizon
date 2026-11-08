@@ -924,6 +924,7 @@ struct Pipeline<R: RandomSource> {
     rule: MaterialRule,
     preliminary: Arc<dyn DensitySampler>,
     source: ResolvedBiomeSource,
+    uniform_carvers: Option<BiomeId>,
     surface: MaterialSurface<R::Positional>,
     noises: BTreeMap<String, Arc<dyn Noise>>,
     extensions: MaterialExtensions<R::Positional>,
@@ -1040,6 +1041,27 @@ fn state(registry: &BlockRegistry, raw: &Value) -> Result<BlockStateId, Generato
             .default_state(&super::tags::identifier(name)?)
             .ok_or_else(|| resource(format!("unknown block {name}"))),
     }
+}
+
+fn uniform_carver_biome<'a>(
+    possible: impl IntoIterator<Item = &'a str>,
+    ids: &BTreeMap<String, BiomeId>,
+    carvers: &[Vec<Arc<WorldCarver>>],
+) -> Option<BiomeId> {
+    let mut possible = possible.into_iter();
+    let first = *ids.get(possible.next()?)?;
+    let selected = carvers.get(first.0 as usize)?;
+    // shortcut: identical inline definitions keep biome lookup; compare values if that becomes costly.
+    possible
+        .all(|name| {
+            ids.get(name)
+                .and_then(|id| carvers.get(id.0 as usize))
+                .is_some_and(|other| {
+                    selected.len() == other.len()
+                        && selected.iter().zip(other).all(|(a, b)| Arc::ptr_eq(a, b))
+                })
+        })
+        .then_some(first)
 }
 
 impl<R: RandomSource> Pipeline<R>
@@ -1222,6 +1244,11 @@ where
             }
             None => source,
         };
+        let uniform_carvers = uniform_carver_biome(
+            source.possible_biomes(),
+            &data.biome_ids,
+            &data.biome_carvers,
+        );
         let climate = router.climate_sampler();
         let mut noises = BTreeMap::new();
         for (name, json) in &data.noises {
@@ -1286,6 +1313,7 @@ where
             rule,
             preliminary,
             source,
+            uniform_carvers,
             surface,
             noises,
             extensions,
@@ -1818,8 +1846,12 @@ where
         worker.timings.surface += lap(&mut clock);
         let carvers = &data.biome_carvers;
         let mask = generate_carving_mask(self.seed, pos, generation, false, |origin| {
-            self.carver_biome(worker, origin)
-                .map(|id| carvers[id.0 as usize].as_slice())
+            match self.uniform_carvers {
+                Some(id) => Ok(carvers[id.0 as usize].as_slice()),
+                None => self
+                    .carver_biome(worker, origin)
+                    .map(|id| carvers[id.0 as usize].as_slice()),
+            }
         })
         .map_err(stage("carvers"))?;
         worker.timings.carvers += lap(&mut clock);
@@ -3904,6 +3936,47 @@ impl GeneratorWorker {
 mod tests {
     use super::*;
     #[test]
+    fn uniform_carvers_require_resolved_biomes_and_identical_ordered_holders() {
+        let definition = r#"{"type":"cave","probability":1,"y":{"absolute":8},"count":0,"thickness":1,"room_vertical_radius_multiplier":1,"horizontal_radius_multiplier":1,"vertical_radius_multiplier":1,"floor_level":-1}"#;
+        let catalog = CarverCatalog::from_json(&Bundle::from([
+            ("minecraft:x".into(), definition.into()),
+            ("minecraft:y".into(), definition.into()),
+        ]))
+        .unwrap();
+        let ids = BTreeMap::from([
+            ("a".into(), BiomeId(0)),
+            ("b".into(), BiomeId(1)),
+            ("outside".into(), BiomeId(2)),
+        ]);
+        let check = |a: &str, b: &str| {
+            uniform_carver_biome(
+                ["a", "b"],
+                &ids,
+                &[
+                    catalog.decode_set(a).unwrap(),
+                    catalog.decode_set(b).unwrap(),
+                ],
+            )
+        };
+        assert_eq!(check(r#"["x","y"]"#, r#"["x","y"]"#), Some(BiomeId(0)));
+        assert_eq!(check("[]", "[]"), Some(BiomeId(0)));
+        assert_eq!(check(r#"["x","x"]"#, r#"["x","x"]"#), Some(BiomeId(0)));
+        assert_eq!(check(r#"["x"]"#, "[]"), None);
+        assert_eq!(check(r#"["x"]"#, r#"["y"]"#), None);
+        assert_eq!(check(r#"["x","y"]"#, r#"["y","x"]"#), None);
+        assert_eq!(check(r#"["x","x"]"#, r#"["x"]"#), None);
+        assert_eq!(check(r#"["x","y"]"#, r#"["x","x"]"#), None);
+        assert_eq!(check(definition, definition), None);
+        let empty = [Vec::new(), Vec::new()];
+        assert_eq!(uniform_carver_biome([], &ids, &empty), None);
+        assert_eq!(uniform_carver_biome(["missing"], &ids, &empty), None);
+        assert_eq!(uniform_carver_biome(["a", "missing"], &ids, &empty), None);
+        assert_eq!(uniform_carver_biome(["outside"], &ids, &empty), None);
+        assert_eq!(uniform_carver_biome(["a", "outside"], &ids, &empty), None);
+        assert_eq!(uniform_carver_biome(["a"], &ids, &empty), Some(BiomeId(0)));
+    }
+
+    #[test]
     fn pack_tags_join_the_prepared_ones_and_broken_ones_are_dropped() {
         let raw = Bundle::from([(
             "minecraft:hill".to_owned(),
@@ -4332,11 +4405,7 @@ mod tests {
 
     #[test]
     fn local_carver_cache_is_worker_owned_and_eviction_preserves_terrain() {
-        let root = std::env::var_os("HORIZON_RESOURCES")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| {
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.local/horizon-client/26.3")
-            });
+        let root = test_root();
         if !root.join("worldgen/world_presets.json").exists() {
             eprintln!("skipping: no worldgen bundle at {}", root.display());
             return;
@@ -4345,14 +4414,27 @@ mod tests {
             crate::level::data::load_registry(&root).expect("registry"),
         ));
         let data = GeneratorData::load(&root.join("worldgen"), registry).unwrap();
+        let preset: Value = serde_json::from_str(&data.world_presets["minecraft:normal"]).unwrap();
+        let settings: Value = serde_json::from_str(&data.settings["minecraft:overworld"]).unwrap();
+        let mut pipeline = Pipeline::new(
+            data.clone(),
+            12345,
+            XoroshiroRandom::new(12345),
+            &preset["dimensions"]["minecraft:overworld"]["generator"],
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        pipeline.uniform_carvers = None;
         let generator = OverworldGenerator::new(data.clone(), 12345).unwrap();
         let mut first = generator.worker();
         let mut second = generator.worker();
         let pos = ChunkPos::new(0, 0);
-        let before = first.generate_proto(pos).unwrap();
+        let before = pipeline.generate(&mut first.state, pos).unwrap();
         assert!(!first.state.carver_biomes.is_empty());
         assert!(second.state.carver_biomes.is_empty());
-        second.generate_proto(pos).unwrap();
+        pipeline.generate(&mut second.state, pos).unwrap();
         assert_eq!(first.state.carver_biomes, second.state.carver_biomes);
         let expected = first.state.carver_biomes.clone();
         first.state.carver_biomes.clear();
@@ -4360,7 +4442,7 @@ mod tests {
         for x in 0..4096 {
             first.state.carver_biomes.insert((x, 100_000), BiomeId(0));
         }
-        let after = first.generate_proto(pos).unwrap();
+        let after = pipeline.generate(&mut first.state, pos).unwrap();
         assert_eq!(first.state.carver_biomes, expected);
         for y in -64..320 {
             for z in 0..16 {
@@ -4379,6 +4461,101 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(second.state.carver_biomes, expected);
+    }
+
+    #[test]
+    fn uniform_carvers_preserve_proto_terrain_and_pack_overrides() {
+        let root = test_root();
+        if !root.join("worldgen/world_presets.json").exists() {
+            eprintln!("skipping: no worldgen bundle at {}", root.display());
+            return;
+        }
+        let dir = root.join("worldgen");
+        let data = GeneratorData::load(&dir, &TEST_REGISTRY).unwrap();
+        eprintln!("prepared registry: {} block states", TEST_REGISTRY.len());
+        let mut plains: Value = serde_json::from_str(
+            &data.biome_json[data.biome_id("minecraft:plains").unwrap().0 as usize],
+        )
+        .unwrap();
+        plains["carvers"] = serde_json::json!([]);
+        let mut overrides = WorldgenOverrides::default();
+        overrides.set("biomes", "minecraft:plains", plains.to_string());
+        let packed = GeneratorData::load_with(&dir, &TEST_REGISTRY, &overrides).unwrap();
+        assert!(
+            packed.biome_carvers[packed.biome_id("minecraft:plains").unwrap().0 as usize]
+                .is_empty()
+        );
+        let preset: Value = serde_json::from_str(&data.world_presets["minecraft:normal"]).unwrap();
+        let settings: Value = serde_json::from_str(&data.settings["minecraft:overworld"]).unwrap();
+        let generator = &preset["dimensions"]["minecraft:overworld"]["generator"];
+        let seed = 8675309;
+        let pos = ChunkPos::new(-7936, 4753);
+        for (data, uniform) in [(data, true), (packed.clone(), false)] {
+            let mut pipeline = Pipeline::new(
+                data.clone(),
+                seed,
+                XoroshiroRandom::new(seed),
+                generator,
+                &settings,
+                false,
+                None,
+            )
+            .unwrap();
+            assert_eq!(pipeline.uniform_carvers.is_some(), uniform);
+            let owner = OverworldGenerator::new(data, seed).unwrap();
+            let mut first = owner.worker();
+            let actual = pipeline.generate(&mut first.state, pos).unwrap();
+            let air = TEST_REGISTRY.default_state("minecraft:air").unwrap();
+            assert!((-64..320).any(|y| actual.block(8, y, 8) != air));
+            assert_eq!(first.state.carver_biomes.is_empty(), uniform);
+            pipeline.uniform_carvers = None;
+            let mut second = owner.worker();
+            let expected = pipeline.generate(&mut second.state, pos).unwrap();
+            assert!(!second.state.carver_biomes.is_empty());
+            for y in -64..320 {
+                for z in 0..16 {
+                    for x in 0..16 {
+                        assert_eq!(actual.block(x, y, z), expected.block(x, y, z));
+                        assert_eq!(actual.biome_id_at(x, y, z), expected.biome_id_at(x, y, z));
+                    }
+                }
+            }
+        }
+        #[derive(Debug)]
+        struct FailingMapper;
+        impl super::super::biome_source::BiomeMapper for FailingMapper {
+            fn additional_biomes(&self) -> &[String] {
+                &[]
+            }
+            fn map<'a>(
+                &'a self,
+                _parent: &'a str,
+                _quart: [i32; 3],
+            ) -> Result<&'a str, horizon_core::density::SampleError> {
+                Err(horizon_core::density::SampleError::External(
+                    "carver biome test failure",
+                ))
+            }
+        }
+        let pipeline = Pipeline::new_with_biome_mapper(
+            packed.clone(),
+            seed,
+            XoroshiroRandom::new(seed),
+            generator,
+            &settings,
+            false,
+            None,
+            Some(Arc::new(FailingMapper)),
+        )
+        .unwrap();
+        assert!(pipeline.uniform_carvers.is_none());
+        let mut worker = OverworldGenerator::new(packed, seed).unwrap().worker();
+        assert!(
+            pipeline
+                .carver_biome(&mut worker.state, pos)
+                .unwrap_err()
+                .contains("carver biome test failure")
+        );
     }
 
     /// The prepared worldgen data, if this checkout has it.
