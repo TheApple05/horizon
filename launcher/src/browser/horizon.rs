@@ -689,8 +689,8 @@ fn install_version(
                 && old.as_ref().is_none_or(|o| o.file != other)
             {
                 return Err(trf(
-                    "{file} is already there: move it away first.",
-                    &[("file", &other)],
+                    "{path} already exists. Move it away, or build into another folder.",
+                    &[("path", &other)],
                 ));
             }
         }

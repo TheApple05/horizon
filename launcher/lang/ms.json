@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Anda belum memiliki sebarang kosmetik.",
   "Claim for free": "Tuntut percuma",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Penyedia pembayaran kedai tidak berkhidmat di negara anda, jadi anda boleh menuntut Set pengasas di sini secara percuma.",
-  "The Founder Set is yours.": "Set pengasas kini milik anda."
+  "The Founder Set is yours.": "Set pengasas kini milik anda.",
+  "Duplicate native mod id {id}.": "ID mod asli pendua {id}."
 }

@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Du eier ingen kosmetikk ennå.",
   "Claim for free": "Hent gratis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Butikkens betalingsleverandør betjener ikke landet ditt, så du kan hente Grunnleggersettet her gratis.",
-  "The Founder Set is yours.": "Grunnleggersettet er ditt."
+  "The Founder Set is yours.": "Grunnleggersettet er ditt.",
+  "Duplicate native mod id {id}.": "Duplisert native mod-ID {id}."
 }

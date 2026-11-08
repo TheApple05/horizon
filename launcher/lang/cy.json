@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Does gennych chi ddim colur eto.",
   "Claim for free": "Hawlio am ddim",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Nid yw darparwr talu'r siop yn gwasanaethu eich gwlad, felly gallwch hawlio'r Set sylfaenydd yma am ddim.",
-  "The Founder Set is yours.": "Mae'r Set sylfaenydd yn eiddo i chi."
+  "The Founder Set is yours.": "Mae'r Set sylfaenydd yn eiddo i chi.",
+  "Duplicate native mod id {id}.": "ID mod brodorol dyblyg {id}."
 }

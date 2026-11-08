@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "עדיין אין לך קוסמטיקה.",
   "Claim for free": "קבלו בחינם",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ספק התשלומים של החנות אינו פועל במדינה שלכם, לכן אפשר לקבל כאן את סט המייסד בחינם.",
-  "The Founder Set is yours.": "סט המייסד שלכם."
+  "The Founder Set is yours.": "סט המייסד שלכם.",
+  "Duplicate native mod id {id}.": "מזהה מוד מקורי כפול {id}."
 }

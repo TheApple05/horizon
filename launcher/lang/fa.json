@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "هنوز هیچ آیتم تزئینی ندارید.",
   "Claim for free": "دریافت رایگان",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ارائه‌دهندهٔ پرداخت فروشگاه در کشور شما خدمات نمی‌دهد، پس می‌توانید مجموعه موسس را اینجا رایگان دریافت کنید.",
-  "The Founder Set is yours.": "مجموعه موسس مال شماست."
+  "The Founder Set is yours.": "مجموعه موسس مال شماست.",
+  "Duplicate native mod id {id}.": "شناسهٔ تکراری ماد بومی {id}."
 }

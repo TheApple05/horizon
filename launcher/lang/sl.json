@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Še nimate nobene kozmetike.",
   "Claim for free": "Prevzemi brezplačno",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ponudnik plačil trgovine ne deluje v vaši državi, zato lahko Ustanoviteljski set tukaj prevzamete brezplačno.",
-  "The Founder Set is yours.": "Ustanoviteljski set je vaš."
+  "The Founder Set is yours.": "Ustanoviteljski set je vaš.",
+  "Duplicate native mod id {id}.": "Podvojen ID izvornega moda {id}."
 }

@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Сизде азырынча косметика жок.",
   "Claim for free": "Акысыз алуу",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Дүкөндүн төлөм провайдери сиздин өлкөдө иштебейт, ошондуктан Негиздөөчү топтомун бул жерден акысыз ала аласыз.",
-  "The Founder Set is yours.": "Негиздөөчү топтому эми сиздики."
+  "The Founder Set is yours.": "Негиздөөчү топтому эми сиздики.",
+  "Duplicate native mod id {id}.": "Жергиликтүү мод ID {id} кайталанды."
 }

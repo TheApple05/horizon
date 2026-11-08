@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "ჯერ არ გაქვთ კოსმეტიკა.",
   "Claim for free": "მიიღე უფასოდ",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "მაღაზიის გადახდის პროვაიდერი შენს ქვეყანაში არ მუშაობს, ამიტომ დამფუძნებელი ნაკრების მიღება აქ უფასოდ შეგიძლია.",
-  "The Founder Set is yours.": "დამფუძნებელი ნაკრები შენია."
+  "The Founder Set is yours.": "დამფუძნებელი ნაკრები შენია.",
+  "Duplicate native mod id {id}.": "მშობლიური მოდის ID {id} დუბლირებულია."
 }

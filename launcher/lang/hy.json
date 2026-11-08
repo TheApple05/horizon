@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Դուք դեռ կոսմետիկա չունեք։",
   "Claim for free": "Ստանալ անվճար",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Խանութի վճարային ծառայությունը ձեր երկրում չի գործում, ուստի Հիմնադիր հավաքածուն կարող եք ստանալ այստեղ անվճար։",
-  "The Founder Set is yours.": "Հիմնադիր հավաքածուն ձերն է։"
+  "The Founder Set is yours.": "Հիմնադիր հավաքածուն ձերն է։",
+  "Duplicate native mod id {id}.": "Կրկնվող բնիկ mod ID՝ {id}։"
 }

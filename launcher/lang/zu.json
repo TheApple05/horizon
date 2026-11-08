@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Awunazo izimonyo okwamanje.",
   "Claim for free": "Thola mahhala",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Umhlinzeki wezinkokhelo wesitolo akasebenzi ezweni lakho, ngakho ungathola Umsunguli usethiwe lapha mahhala.",
-  "The Founder Set is yours.": "Umsunguli usethiwe ungowakho."
+  "The Founder Set is yours.": "Umsunguli usethiwe ungowakho.",
+  "Duplicate native mod id {id}.": "I-ID yemod yemvelo ephindiwe {id}."
 }

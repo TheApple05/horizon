@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Сирӗн хальлӗхе пӗр косметика та ҫук.",
   "Claim for free": "Тӳлевсӗр ил",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Лавккан тӳлев ҫӑлкуҫӗ сирӗн ҫӗршывра ӗҫлемест, ҫавӑнпа Учредительсен пуххине кунта тӳлевсӗр илме пултаратӑр.",
-  "The Founder Set is yours.": "Учредительсен пуххи — сирӗн."
+  "The Founder Set is yours.": "Учредительсен пуххи — сирӗн.",
+  "Duplicate native mod id {id}.": "Тӗп модӑн идентификаторӗн иккӗмӗш экземплярӗ {id}."
 }

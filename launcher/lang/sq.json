@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Ende nuk ke asnjë kozmetikë.",
   "Claim for free": "Merre falas",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ofruesi i pagesave të dyqanit nuk shërben në vendin tënd, prandaj mund ta marrësh Setin themelues këtu falas.",
-  "The Founder Set is yours.": "Seti themelues është yti."
+  "The Founder Set is yours.": "Seti themelues është yti.",
+  "Duplicate native mod id {id}.": "ID e mod-it amtare e dyfishuar {id}."
 }

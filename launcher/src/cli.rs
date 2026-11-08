@@ -3697,7 +3697,7 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
         ModpackCmd::Play { pack, version } => {
             let work = work(&pack)?;
             let instance = modpack_instance(&work, instances::list())
-                .ok_or_else(|| trf("No instance plays {pack}.", &[("pack", &pack)]))?;
+                .ok_or_else(|| format!("{pack}: {}", tr("not found")))?;
             return execute(
                 Cmd::Play {
                     version,

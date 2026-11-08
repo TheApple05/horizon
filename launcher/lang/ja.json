@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "コスメをまだ持っていません。",
   "Claim for free": "無料で受け取る",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ショップの決済サービスはお住まいの国に対応していないため、ファウンダーセットをここで無料で受け取れます。",
-  "The Founder Set is yours.": "ファウンダーセットはあなたのものです。"
+  "The Founder Set is yours.": "ファウンダーセットはあなたのものです。",
+  "Duplicate native mod id {id}.": "ネイティブmod ID {id} が重複しています。"
 }
