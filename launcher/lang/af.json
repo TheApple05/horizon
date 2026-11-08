@@ -1121,5 +1121,14 @@
   "Claim for free": "Eis gratis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Die winkel se betalingsverskaffer bedien nie jou land nie, dus kan jy die Stigtersstel hier gratis eis.",
   "The Founder Set is yours.": "Die Stigtersstel is joune.",
-  "Duplicate native mod id {id}.": "Duplikaat oorspronklike mod-ID {id}."
+  "Duplicate native mod id {id}.": "Duplikaat oorspronklike mod-ID {id}.",
+  "Could not open Prism's accounts file.": "Kon nie Prism se rekeninglêer oopmaak nie.",
+  "Could not read Prism's accounts file.": "Kon nie Prism se rekeninglêer lees nie.",
+  "Prism's accounts file is too large.": "Prism se rekeninglêer is te groot.",
+  "Could not parse Prism's accounts file.": "Kon nie Prism se rekeninglêer ontleed nie.",
+  "Prism's accounts file has no accounts.": "Prism se rekeninglêer het geen rekeninge nie.",
+  "Select one Microsoft account in Prism Launcher first.": "Kies eers een Microsoft-rekening in Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism het geen Minecraft-sessie nie. Meld eers by Prism aan.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Maak Prism Launcher oop, verfris sy rekening en voer dan weer sy sessie in.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism se huidige Minecraft-sessie is ingevoer. Verfris en voer weer in vanaf Prism wanneer dit verval."
 }

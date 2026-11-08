@@ -1121,5 +1121,14 @@
   "Claim for free": "Kiʻi manuahi",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ʻAʻole lawelawe ka mea uku o ka hale kūʻai i kou ʻāina, no laila hiki iā ʻoe ke kiʻi i ka Hoʻonohonoho hoʻokumu ma ʻaneʻi me ka manuahi.",
   "The Founder Set is yours.": "Nou ka Hoʻonohonoho hoʻokumu.",
-  "Duplicate native mod id {id}.": "ID mod maoli pālua {id}."
+  "Duplicate native mod id {id}.": "ID mod maoli pālua {id}.",
+  "Could not open Prism's accounts file.": "ʻAʻole hiki ke wehe i ka faila moʻokāki o Prism.",
+  "Could not read Prism's accounts file.": "ʻAʻole hiki ke heluhelu i ka faila moʻokāki o Prism.",
+  "Prism's accounts file is too large.": "Nui loa ka faila moʻokāki o Prism.",
+  "Could not parse Prism's accounts file.": "ʻAʻole hiki ke kālailai i ka faila moʻokāki o Prism.",
+  "Prism's accounts file has no accounts.": "ʻAʻohe moʻokāki i loko o ka faila moʻokāki o Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "E koho mua i hoʻokahi moʻokāki Microsoft ma Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "ʻAʻohe hui Minecraft o Prism. E komo mua me Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "E wehe iā Prism Launcher, e hōʻā hou i kona moʻokāki, a laila e hoʻokomo hou i kona hui.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Ua hoʻokomo ʻia ka hui Minecraft o kēia manawa o Prism. E hōʻā hou a e hoʻokomo hou mai Prism ke pau."
 }

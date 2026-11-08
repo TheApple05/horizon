@@ -1121,5 +1121,14 @@
   "Claim for free": "Hangi tasuta",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Poe makseteenuse pakkuja sinu riigis ei tegutse, seega saad Asutaja komplekti siit tasuta.",
   "The Founder Set is yours.": "Asutaja komplekt on sinu.",
-  "Duplicate native mod id {id}.": "Korduv natiivse modi ID {id}."
+  "Duplicate native mod id {id}.": "Korduv natiivse modi ID {id}.",
+  "Could not open Prism's accounts file.": "Prismi kontofaili avamine ebaõnnestus.",
+  "Could not read Prism's accounts file.": "Prismi kontofaili lugemine ebaõnnestus.",
+  "Prism's accounts file is too large.": "Prismi kontofail on liiga suur.",
+  "Could not parse Prism's accounts file.": "Prismi kontofaili sõelumine ebaõnnestus.",
+  "Prism's accounts file has no accounts.": "Prismi kontofailis pole ühtegi kontot.",
+  "Select one Microsoft account in Prism Launcher first.": "Vali esmalt Prism Launcheris üks Microsofti konto.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prismil pole Minecrafti seanssi. Logi esmalt Prismi kaudu sisse.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Ava Prism Launcher, värskenda selle kontot ja impordi seejärel selle seanss uuesti.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prismi praegune Minecrafti seanss imporditi. Kui see aegub, värskenda ja impordi see Prismist uuesti."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "მიიღე უფასოდ",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "მაღაზიის გადახდის პროვაიდერი შენს ქვეყანაში არ მუშაობს, ამიტომ დამფუძნებელი ნაკრების მიღება აქ უფასოდ შეგიძლია.",
   "The Founder Set is yours.": "დამფუძნებელი ნაკრები შენია.",
-  "Duplicate native mod id {id}.": "მშობლიური მოდის ID {id} დუბლირებულია."
+  "Duplicate native mod id {id}.": "მშობლიური მოდის ID {id} დუბლირებულია.",
+  "Could not open Prism's accounts file.": "Prism-ის ანგარიშების ფაილის გახსნა ვერ მოხერხდა.",
+  "Could not read Prism's accounts file.": "Prism-ის ანგარიშების ფაილის წაკითხვა ვერ მოხერხდა.",
+  "Prism's accounts file is too large.": "Prism-ის ანგარიშების ფაილი ძალიან დიდია.",
+  "Could not parse Prism's accounts file.": "Prism-ის ანგარიშების ფაილის დამუშავება ვერ მოხერხდა.",
+  "Prism's accounts file has no accounts.": "Prism-ის ანგარიშების ფაილში ანგარიშები არ არის.",
+  "Select one Microsoft account in Prism Launcher first.": "ჯერ აირჩიეთ ერთი Microsoft ანგარიში Prism Launcher-ში.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism-ს Minecraft სესია არ აქვს. ჯერ შედით Prism-ით.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "გახსენით Prism Launcher, განაახლეთ მისი ანგარიში და შემდეგ ხელახლა იმპორტეთ მისი სესია.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism-ის მიმდინარე Minecraft სესია იმპორტირებულია. ვადის გასვლისას განაახლეთ და ხელახლა იმპორტეთ Prism-იდან."
 }

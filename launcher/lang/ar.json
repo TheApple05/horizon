@@ -1121,5 +1121,14 @@
   "Claim for free": "احصل عليه مجانًا",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "مزوّد الدفع في المتجر لا يخدم بلدك، لذا يمكنك الحصول على طقم المؤسسين هنا مجانًا.",
   "The Founder Set is yours.": "طقم المؤسسين أصبح لك.",
-  "Duplicate native mod id {id}.": "معرّف الوحدة الأصلية {id} مكرر."
+  "Duplicate native mod id {id}.": "معرّف الوحدة الأصلية {id} مكرر.",
+  "Could not open Prism's accounts file.": "تعذر فتح ملف حسابات Prism.",
+  "Could not read Prism's accounts file.": "تعذرت قراءة ملف حسابات Prism.",
+  "Prism's accounts file is too large.": "ملف حسابات Prism كبير جدًا.",
+  "Could not parse Prism's accounts file.": "تعذر تحليل ملف حسابات Prism.",
+  "Prism's accounts file has no accounts.": "لا يحتوي ملف حسابات Prism على أي حسابات.",
+  "Select one Microsoft account in Prism Launcher first.": "حدد حساب Microsoft واحدًا في Prism Launcher أولًا.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "ليس لدى Prism جلسة Minecraft. سجّل الدخول إلى Prism أولًا.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "افتح Prism Launcher، وحدّث حسابه، ثم استورد جلسته مرة أخرى.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "تم استيراد جلسة Minecraft الحالية لـ Prism. حدّث وأعد الاستيراد من Prism عند انتهاء صلاحيتها."
 }

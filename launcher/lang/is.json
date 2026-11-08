@@ -1121,5 +1121,14 @@
   "Claim for free": "Sækja ókeypis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Greiðsluþjónusta verslunarinnar þjónar ekki þínu landi, svo þú getur sótt Stofnandi settið hér ókeypis.",
   "The Founder Set is yours.": "Stofnandi settið er þitt.",
-  "Duplicate native mod id {id}.": "Tvítekið auðkenni innbyggðs mods {id}."
+  "Duplicate native mod id {id}.": "Tvítekið auðkenni innbyggðs mods {id}.",
+  "Could not open Prism's accounts file.": "Ekki tókst að opna reikningsskrá Prism.",
+  "Could not read Prism's accounts file.": "Ekki tókst að lesa reikningsskrá Prism.",
+  "Prism's accounts file is too large.": "Reikningsskrá Prism er of stór.",
+  "Could not parse Prism's accounts file.": "Ekki tókst að greina reikningsskrá Prism.",
+  "Prism's accounts file has no accounts.": "Reikningsskrá Prism inniheldur enga reikninga.",
+  "Select one Microsoft account in Prism Launcher first.": "Veldu fyrst einn Microsoft-reikning í Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism hefur enga Minecraft-lotuna. Skráðu þig fyrst inn í Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Opnaðu Prism Launcher, endurnýjaðu reikninginn þess og flyttu svo lotuna þess inn aftur.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Núverandi Minecraft-lotun Prism var flutt inn. Endurnýjaðu og flyttu aftur inn frá Prism þegar hún rennur út."
 }

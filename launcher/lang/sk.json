@@ -1121,5 +1121,14 @@
   "Claim for free": "Získať zadarmo",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Platobná služba obchodu vo vašej krajine nefunguje, preto si Zakladateľskú súpravu môžete vyzdvihnúť tu zadarmo.",
   "The Founder Set is yours.": "Zakladateľská súprava je vaša.",
-  "Duplicate native mod id {id}.": "Duplicitné ID natívneho modu {id}."
+  "Duplicate native mod id {id}.": "Duplicitné ID natívneho modu {id}.",
+  "Could not open Prism's accounts file.": "Súbor účtov Prism sa nepodarilo otvoriť.",
+  "Could not read Prism's accounts file.": "Súbor účtov Prism sa nepodarilo prečítať.",
+  "Prism's accounts file is too large.": "Súbor účtov Prism je príliš veľký.",
+  "Could not parse Prism's accounts file.": "Súbor účtov Prism sa nepodarilo analyzovať.",
+  "Prism's accounts file has no accounts.": "Súbor účtov Prism neobsahuje žiadne účty.",
+  "Select one Microsoft account in Prism Launcher first.": "Najprv vyberte jeden účet Microsoft v Prism Launcheri.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism nemá reláciu Minecraft. Najprv sa prihláste pomocou Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Otvorte Prism Launcher, obnovte jeho účet a potom znova importujte reláciu.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Aktuálna relácia Minecraft z Prism bola importovaná. Po jej vypršaní ju obnovte a znova importujte z Prism."
 }

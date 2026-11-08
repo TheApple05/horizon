@@ -1121,5 +1121,14 @@
   "Claim for free": "Hämta gratis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Butikens betalleverantör finns inte i ditt land, så du kan hämta Grundaruppsättningen här gratis.",
   "The Founder Set is yours.": "Grundaruppsättningen är din.",
-  "Duplicate native mod id {id}.": "Dubblerat inbyggt mod-ID {id}."
+  "Duplicate native mod id {id}.": "Dubblerat inbyggt mod-ID {id}.",
+  "Could not open Prism's accounts file.": "Det gick inte att öppna Prisms kontofil.",
+  "Could not read Prism's accounts file.": "Det gick inte att läsa Prisms kontofil.",
+  "Prism's accounts file is too large.": "Prisms kontofil är för stor.",
+  "Could not parse Prism's accounts file.": "Det gick inte att tolka Prisms kontofil.",
+  "Prism's accounts file has no accounts.": "Prisms kontofil innehåller inga konton.",
+  "Select one Microsoft account in Prism Launcher first.": "Välj ett Microsoft-konto i Prism Launcher först.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism har ingen Minecraft-session. Logga in med Prism först.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Öppna Prism Launcher, uppdatera kontot och importera sedan sessionen igen.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prisms nuvarande Minecraft-session importerades. Uppdatera och importera igen från Prism när den löper ut."
 }

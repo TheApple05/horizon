@@ -1121,5 +1121,14 @@
   "Claim for free": "Ստանալ անվճար",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Խանութի վճարային ծառայությունը ձեր երկրում չի գործում, ուստի Հիմնադիր հավաքածուն կարող եք ստանալ այստեղ անվճար։",
   "The Founder Set is yours.": "Հիմնադիր հավաքածուն ձերն է։",
-  "Duplicate native mod id {id}.": "Կրկնվող բնիկ mod ID՝ {id}։"
+  "Duplicate native mod id {id}.": "Կրկնվող բնիկ mod ID՝ {id}։",
+  "Could not open Prism's accounts file.": "Չհաջողվեց բացել Prism-ի հաշիվների ֆայլը։",
+  "Could not read Prism's accounts file.": "Չհաջողվեց կարդալ Prism-ի հաշիվների ֆայլը։",
+  "Prism's accounts file is too large.": "Prism-ի հաշիվների ֆայլը չափազանց մեծ է։",
+  "Could not parse Prism's accounts file.": "Չհաջողվեց վերլուծել Prism-ի հաշիվների ֆայլը։",
+  "Prism's accounts file has no accounts.": "Prism-ի հաշիվների ֆայլում հաշիվներ չկան։",
+  "Select one Microsoft account in Prism Launcher first.": "Նախ Prism Launcher-ում ընտրեք մեկ Microsoft հաշիվ։",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism-ը Minecraft-ի սեսիա չունի։ Նախ մուտք գործեք Prism։",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Բացեք Prism Launcher-ը, թարմացրեք դրա հաշիվը, ապա նորից ներմուծեք դրա սեսիան։",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism-ի ընթացիկ Minecraft սեսիան ներմուծվեց։ Ժամկետը լրանալիս թարմացրեք և նորից ներմուծեք Prism-ից։"
 }

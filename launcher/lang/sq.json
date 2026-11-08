@@ -1121,5 +1121,14 @@
   "Claim for free": "Merre falas",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ofruesi i pagesave të dyqanit nuk shërben në vendin tënd, prandaj mund ta marrësh Setin themelues këtu falas.",
   "The Founder Set is yours.": "Seti themelues është yti.",
-  "Duplicate native mod id {id}.": "ID e mod-it amtare e dyfishuar {id}."
+  "Duplicate native mod id {id}.": "ID e mod-it amtare e dyfishuar {id}.",
+  "Could not open Prism's accounts file.": "Skedari i llogarive i Prism nuk mund të hapej.",
+  "Could not read Prism's accounts file.": "Skedari i llogarive i Prism nuk mund të lexohej.",
+  "Prism's accounts file is too large.": "Skedari i llogarive i Prism është shumë i madh.",
+  "Could not parse Prism's accounts file.": "Skedari i llogarive i Prism nuk mund të analizohej.",
+  "Prism's accounts file has no accounts.": "Skedari i llogarive i Prism nuk ka llogari.",
+  "Select one Microsoft account in Prism Launcher first.": "Së pari zgjidh një llogari Microsoft në Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism nuk ka sesion Minecraft. Së pari identifikohu me Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Hap Prism Launcher, rifresko llogarinë e tij, më pas importo përsëri sesionin.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Sesioni aktual i Minecraft i Prism u importua. Rifresko dhe riimporto nga Prism kur të skadojë."
 }

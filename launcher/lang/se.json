@@ -1121,5 +1121,14 @@
   "Claim for free": "Oaččo nuvttá",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Gávppi máksobálvalus ii bálvāl du riikka, nu ahte sáhtát oažžut Ásaheaddji searvvi dás nuvttá.",
   "The Founder Set is yours.": "Ásaheaddji searvi lea du.",
-  "Duplicate native mod id {id}.": "Dupliserejuvvon álgo mod-ID {id}."
+  "Duplicate native mod id {id}.": "Dupliserejuvvon álgo mod-ID {id}.",
+  "Could not open Prism's accounts file.": "Ii sáhttán rahpat Prism kontofiilla.",
+  "Could not read Prism's accounts file.": "Ii sáhttán lohkat Prism kontofiilla.",
+  "Prism's accounts file is too large.": "Prism kontofiila lea menddo stuoris.",
+  "Could not parse Prism's accounts file.": "Ii sáhttán analyseret Prism kontofiilla.",
+  "Prism's accounts file has no accounts.": "Prism kontofiillas ii leat konttut.",
+  "Select one Microsoft account in Prism Launcher first.": "Vállje vuos ovtta Microsoft-konto Prism Launcheris.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prismis ii leat Minecraft-seanssa. Sisačáli vuos Prismain.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Raba Prism Launcher, ođasmahte dan konto, ja importere seanssa fas.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism dálálaš Minecraft-seanssa lea importerejuvvon. Ođasmahte ja importere fas Prismas go dat nohká."
 }

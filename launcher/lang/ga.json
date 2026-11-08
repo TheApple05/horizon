@@ -1121,5 +1121,14 @@
   "Claim for free": "Faigh saor in aisce",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ní fhreastalaíonn soláthraí íocaíochta an tsiopa ar do thír, mar sin is féidir leat an tSraith bunaitheoir a fháil anseo saor in aisce.",
   "The Founder Set is yours.": "Is leatsa an tSraith bunaitheoir.",
-  "Duplicate native mod id {id}.": "ID moda dhúchasaigh dúblach {id}."
+  "Duplicate native mod id {id}.": "ID moda dhúchasaigh dúblach {id}.",
+  "Could not open Prism's accounts file.": "Níorbh fhéidir comhad cuntais Prism a oscailt.",
+  "Could not read Prism's accounts file.": "Níorbh fhéidir comhad cuntais Prism a léamh.",
+  "Prism's accounts file is too large.": "Tá comhad cuntais Prism rómhór.",
+  "Could not parse Prism's accounts file.": "Níorbh fhéidir comhad cuntais Prism a pharsáil.",
+  "Prism's accounts file has no accounts.": "Níl aon chuntas i gcomhad cuntais Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "Roghnaigh cuntas Microsoft amháin i Prism Launcher ar dtús.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Níl aon seisiún Minecraft ag Prism. Sínigh isteach le Prism ar dtús.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Oscail Prism Launcher, athnuaigh a chuntas, ansin allmhairigh a sheisiún arís.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Allmhairíodh seisiún Minecraft reatha Prism. Athnuaigh agus allmhairigh arís ó Prism nuair a théann sé in éag."
 }

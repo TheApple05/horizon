@@ -1121,5 +1121,14 @@
   "Claim for free": "Igényeld ingyen",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "A bolt fizetési szolgáltatója nem érhető el az országodban, ezért az Alapító készletet itt ingyen igényelheted.",
   "The Founder Set is yours.": "Az Alapító készlet a tiéd.",
-  "Duplicate native mod id {id}.": "Duplikált natív mod-azonosító {id}."
+  "Duplicate native mod id {id}.": "Duplikált natív mod-azonosító {id}.",
+  "Could not open Prism's accounts file.": "Nem sikerült megnyitni a Prism fiókfájlját.",
+  "Could not read Prism's accounts file.": "Nem sikerült beolvasni a Prism fiókfájlját.",
+  "Prism's accounts file is too large.": "A Prism fiókfájlja túl nagy.",
+  "Could not parse Prism's accounts file.": "Nem sikerült feldolgozni a Prism fiókfájlját.",
+  "Prism's accounts file has no accounts.": "A Prism fiókfájlja nem tartalmaz fiókot.",
+  "Select one Microsoft account in Prism Launcher first.": "Először válasszon ki egy Microsoft-fiókot a Prism Launcherben.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "A Prismnek nincs Minecraft-munkamenete. Először jelentkezzen be a Prismbe.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Nyissa meg a Prism Launchert, frissítse a fiókját, majd importálja újra a munkamenetét.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "A Prism jelenlegi Minecraft-munkamenete importálva. Lejáratkor frissítsen, és importálja újra a Prismből."
 }

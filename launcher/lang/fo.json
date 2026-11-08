@@ -1121,5 +1121,14 @@
   "Claim for free": "Fá ókeypis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Gjaldsveitarin hjá handlinum tænar ikki tínum landi, so tú kanst fáa Stovnara settið her ókeypis.",
   "The Founder Set is yours.": "Stovnara settið er títt.",
-  "Duplicate native mod id {id}.": "Tvígilt native mod ID {id}."
+  "Duplicate native mod id {id}.": "Tvígilt native mod ID {id}.",
+  "Could not open Prism's accounts file.": "Kundi ikki lata Prism sí kontufílu.",
+  "Could not read Prism's accounts file.": "Kundi ikki lesa Prism sí kontufílu.",
+  "Prism's accounts file is too large.": "Prism sí kontufíla er ov stór.",
+  "Could not parse Prism's accounts file.": "Kundi ikki greina Prism sí kontufílu.",
+  "Prism's accounts file has no accounts.": "Prism sí kontufíla hevur ongar kontur.",
+  "Select one Microsoft account in Prism Launcher first.": "Vel fyrst eina Microsoft-konto í Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism hevur onga Minecraft-sessjón. Rita fyrst inn við Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Lat Prism Launcher upp, dagføri konto hansara og importa sessjónina aftur.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Innflutti núverandi Minecraft-sessjón Prism. Dagfør og importa aftur frá Prism, tá ið hon gongur út."
 }

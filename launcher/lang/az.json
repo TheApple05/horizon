@@ -1121,5 +1121,14 @@
   "Claim for free": "Pulsuz götür",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Mağazanın ödəniş provayderi ölkənizə xidmət göstərmir, ona görə Təsisçi dəstini burada pulsuz götürə bilərsiniz.",
   "The Founder Set is yours.": "Təsisçi dəsti artıq sizindir.",
-  "Duplicate native mod id {id}.": "Təkrar yerli mod ID-si {id}."
+  "Duplicate native mod id {id}.": "Təkrar yerli mod ID-si {id}.",
+  "Could not open Prism's accounts file.": "Prism hesab faylı açıla bilmədi.",
+  "Could not read Prism's accounts file.": "Prism hesab faylı oxuna bilmədi.",
+  "Prism's accounts file is too large.": "Prism hesab faylı çox böyükdür.",
+  "Could not parse Prism's accounts file.": "Prism hesab faylı təhlil edilə bilmədi.",
+  "Prism's accounts file has no accounts.": "Prism hesab faylında hesab yoxdur.",
+  "Select one Microsoft account in Prism Launcher first.": "Əvvəlcə Prism Launcher-də bir Microsoft hesabı seçin.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism-in Minecraft sessiyası yoxdur. Əvvəlcə Prism-ə daxil olun.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher-i açın, hesabını yeniləyin, sonra sessiyasını yenidən idxal edin.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism-in cari Minecraft sessiyası idxal edildi. Vaxtı bitdikdə Prism-dən yeniləyib yenidən idxal edin."
 }

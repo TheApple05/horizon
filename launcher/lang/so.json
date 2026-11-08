@@ -1121,5 +1121,14 @@
   "Claim for free": "Hel lacag la'aan",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Bixiyaha lacag-bixinta dukaanku kama shaqeeyo dalkaaga, sidaas darteed waxaad halkan ka heli kartaa Aasaasaha dhigay lacag la'aan.",
   "The Founder Set is yours.": "Aasaasaha dhigay waa kaaga.",
-  "Duplicate native mod id {id}.": "Aqoonsiga mod asli ah oo labanlaab ah {id}."
+  "Duplicate native mod id {id}.": "Aqoonsiga mod asli ah oo labanlaab ah {id}.",
+  "Could not open Prism's accounts file.": "Lama furin karin faylka akoonnada Prism.",
+  "Could not read Prism's accounts file.": "Lama akhrin karin faylka akoonnada Prism.",
+  "Prism's accounts file is too large.": "Faylka akoonnada Prism aad buu u weyn yahay.",
+  "Could not parse Prism's accounts file.": "Lama falanqayn karin faylka akoonnada Prism.",
+  "Prism's accounts file has no accounts.": "Faylka akoonnada Prism ma laha akoonno.",
+  "Select one Microsoft account in Prism Launcher first.": "Marka hore Prism Launcher ku dooro hal akoon Microsoft.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism ma laha fadhi Minecraft. Marka hore Prism ku gal.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Fur Prism Launcher, cusboonaysii akoonkeeda, ka dibna mar kale soo deji fadhigeeda.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Fadhiga Minecraft ee hadda ee Prism waa la soo dejiyay. Marka uu dhamaado, cusboonaysii oo mar kale ka soo deji Prism."
 }

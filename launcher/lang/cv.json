@@ -1121,5 +1121,14 @@
   "Claim for free": "Тӳлевсӗр ил",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Лавккан тӳлев ҫӑлкуҫӗ сирӗн ҫӗршывра ӗҫлемест, ҫавӑнпа Учредительсен пуххине кунта тӳлевсӗр илме пултаратӑр.",
   "The Founder Set is yours.": "Учредительсен пуххи — сирӗн.",
-  "Duplicate native mod id {id}.": "Тӗп модӑн идентификаторӗн иккӗмӗш экземплярӗ {id}."
+  "Duplicate native mod id {id}.": "Тӗп модӑн идентификаторӗн иккӗмӗш экземплярӗ {id}.",
+  "Could not open Prism's accounts file.": "Prism аккаунтсене файлне уçма пултараймарăм.",
+  "Could not read Prism's accounts file.": "Prism аккаунтсене файлне вулама пултараймарăм.",
+  "Prism's accounts file is too large.": "Prism аккаунтсене файлĕ питĕ пысăк.",
+  "Could not parse Prism's accounts file.": "Prism аккаунтсене файлне тишкерме пултараймарăм.",
+  "Prism's accounts file has no accounts.": "Prism аккаунтсене файлĕнче аккаунтсем çук.",
+  "Select one Microsoft account in Prism Launcher first.": "Prism Launcher-та малтан пĕр Microsoft аккаунт суйлăр.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism-ăн Minecraft сессийĕ çук. Малтан Prism урлă кĕрĕр.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher уçăр, унăн аккаунтне çĕнетĕр, кайран унăн сессине тепĕр хут импортлăр.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism-ăн хальхи Minecraft сессине импортларăм. Вăл вĕçленсен Prism-ран çĕнетсе тепĕр хут импортлăр."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "मुफ़्त पाएँ",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "दुकान का भुगतान प्रदाता आपके देश में सेवा नहीं देता, इसलिए आप फ़ाउंडर सेट यहाँ मुफ़्त पा सकते हैं।",
   "The Founder Set is yours.": "फ़ाउंडर सेट अब आपका है।",
-  "Duplicate native mod id {id}.": "मूल मॉड आईडी {id} डुप्लिकेट है।"
+  "Duplicate native mod id {id}.": "मूल मॉड आईडी {id} डुप्लिकेट है।",
+  "Could not open Prism's accounts file.": "Prism की खाता फ़ाइल नहीं खोली जा सकी।",
+  "Could not read Prism's accounts file.": "Prism की खाता फ़ाइल नहीं पढ़ी जा सकी।",
+  "Prism's accounts file is too large.": "Prism की खाता फ़ाइल बहुत बड़ी है।",
+  "Could not parse Prism's accounts file.": "Prism की खाता फ़ाइल का विश्लेषण नहीं किया जा सका।",
+  "Prism's accounts file has no accounts.": "Prism की खाता फ़ाइल में कोई खाता नहीं है।",
+  "Select one Microsoft account in Prism Launcher first.": "कृपया पहले Prism Launcher में एक Microsoft खाता चुनें।",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism के पास कोई Minecraft सत्र नहीं है। कृपया पहले Prism से साइन इन करें।",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher खोलें, इसका खाता रीफ़्रेश करें, फिर इसका सत्र दोबारा आयात करें।",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism का मौजूदा Minecraft सत्र आयात किया गया। समाप्त होने पर Prism से रीफ़्रेश करके दोबारा आयात करें।"
 }

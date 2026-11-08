@@ -1121,5 +1121,14 @@
   "Claim for free": "Thola mahhala",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Umhlinzeki wezinkokhelo wesitolo akasebenzi ezweni lakho, ngakho ungathola Umsunguli usethiwe lapha mahhala.",
   "The Founder Set is yours.": "Umsunguli usethiwe ungowakho.",
-  "Duplicate native mod id {id}.": "I-ID yemod yemvelo ephindiwe {id}."
+  "Duplicate native mod id {id}.": "I-ID yemod yemvelo ephindiwe {id}.",
+  "Could not open Prism's accounts file.": "Ayikwazanga ukuvula ifayela lama-akhawunti le-Prism.",
+  "Could not read Prism's accounts file.": "Ayikwazanga ukufunda ifayela lama-akhawunti le-Prism.",
+  "Prism's accounts file is too large.": "Ifayela lama-akhawunti le-Prism likhulu kakhulu.",
+  "Could not parse Prism's accounts file.": "Ayikwazanga ukuhlaziya ifayela lama-akhawunti le-Prism.",
+  "Prism's accounts file has no accounts.": "Ifayela lama-akhawunti le-Prism alinama-akhawunti.",
+  "Select one Microsoft account in Prism Launcher first.": "Khetha i-akhawunti eyodwa ye-Microsoft ku-Prism Launcher kuqala.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "I-Prism ayinayo isikhathi sokusebenza se-Minecraft. Ngena ngemvume nge-Prism kuqala.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Vula i-Prism Launcher, vuselela i-akhawunti yayo, bese uthumela isikhathi sayo sokusebenza futhi.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Kuthunyelwe isikhathi sokusebenza se-Minecraft samanje se-Prism. Vuselela bese uthumela futhi kusuka ku-Prism lapho siphela khona."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "Атрымаць бясплатна",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Плацежны сэрвіс крамы не працуе ў вашай краіне, таму Набор заснавальнікаў можна атрымаць тут бясплатна.",
   "The Founder Set is yours.": "Набор заснавальнікаў цяпер ваш.",
-  "Duplicate native mod id {id}.": "Дублікат ідэнтыфікатара роднага мода {id}."
+  "Duplicate native mod id {id}.": "Дублікат ідэнтыфікатара роднага мода {id}.",
+  "Could not open Prism's accounts file.": "Не ўдалося адкрыць файл акаўнтаў Prism.",
+  "Could not read Prism's accounts file.": "Не ўдалося прачытаць файл акаўнтаў Prism.",
+  "Prism's accounts file is too large.": "Файл акаўнтаў Prism занадта вялікі.",
+  "Could not parse Prism's accounts file.": "Не ўдалося разабраць файл акаўнтаў Prism.",
+  "Prism's accounts file has no accounts.": "У файле акаўнтаў Prism няма акаўнтаў.",
+  "Select one Microsoft account in Prism Launcher first.": "Спачатку выберыце адзін акаўнт Microsoft у Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "У Prism няма сесіі Minecraft. Спачатку ўвайдзіце ў Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Адкрыйце Prism Launcher, абнавіце яго акаўнт, затым ізноў імпартуйце яго сесію.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Бягучая сесія Minecraft у Prism імпартавана. Калі яна састарэе, абнавіце і паўторна імпартуйце з Prism."
 }

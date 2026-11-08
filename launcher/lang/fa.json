@@ -1121,5 +1121,14 @@
   "Claim for free": "دریافت رایگان",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ارائه‌دهندهٔ پرداخت فروشگاه در کشور شما خدمات نمی‌دهد، پس می‌توانید مجموعه موسس را اینجا رایگان دریافت کنید.",
   "The Founder Set is yours.": "مجموعه موسس مال شماست.",
-  "Duplicate native mod id {id}.": "شناسهٔ تکراری ماد بومی {id}."
+  "Duplicate native mod id {id}.": "شناسهٔ تکراری ماد بومی {id}.",
+  "Could not open Prism's accounts file.": "فایل حساب‌های Prism باز نشد.",
+  "Could not read Prism's accounts file.": "فایل حساب‌های Prism خوانده نشد.",
+  "Prism's accounts file is too large.": "فایل حساب‌های Prism بیش از حد بزرگ است.",
+  "Could not parse Prism's accounts file.": "فایل حساب‌های Prism تجزیه نشد.",
+  "Prism's accounts file has no accounts.": "فایل حساب‌های Prism هیچ حسابی ندارد.",
+  "Select one Microsoft account in Prism Launcher first.": "ابتدا یک حساب Microsoft را در Prism Launcher انتخاب کنید.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism هیچ نشست Minecraft ندارد. ابتدا با Prism وارد شوید.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher را باز کنید، حساب آن را به‌روزرسانی کنید، سپس نشست آن را دوباره وارد کنید.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "نشست فعلی Minecraft در Prism وارد شد. وقتی منقضی شد، آن را از Prism به‌روزرسانی و دوباره وارد کنید."
 }

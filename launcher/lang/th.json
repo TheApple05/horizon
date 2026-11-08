@@ -1121,5 +1121,14 @@
   "Claim for free": "รับฟรี",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ผู้ให้บริการชำระเงินของร้านค้าไม่ให้บริการในประเทศของคุณ คุณจึงรับชุดผู้ก่อตั้งได้ที่นี่ฟรี",
   "The Founder Set is yours.": "ชุดผู้ก่อตั้งเป็นของคุณแล้ว",
-  "Duplicate native mod id {id}.": "ID ของมอดเนทีฟ {id} ซ้ำกัน"
+  "Duplicate native mod id {id}.": "ID ของมอดเนทีฟ {id} ซ้ำกัน",
+  "Could not open Prism's accounts file.": "ไม่สามารถเปิดไฟล์บัญชีของ Prism ได้",
+  "Could not read Prism's accounts file.": "ไม่สามารถอ่านไฟล์บัญชีของ Prism ได้",
+  "Prism's accounts file is too large.": "ไฟล์บัญชีของ Prism มีขนาดใหญ่เกินไป",
+  "Could not parse Prism's accounts file.": "ไม่สามารถแยกวิเคราะห์ไฟล์บัญชีของ Prism ได้",
+  "Prism's accounts file has no accounts.": "ไฟล์บัญชีของ Prism ไม่มีบัญชี",
+  "Select one Microsoft account in Prism Launcher first.": "โปรดเลือกบัญชี Microsoft หนึ่งบัญชีใน Prism Launcher ก่อน",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism ไม่มีเซสชัน Minecraft โปรดลงชื่อเข้าใช้ด้วย Prism ก่อน",
+  "Open Prism Launcher, refresh its account, then import its session again.": "เปิด Prism Launcher รีเฟรชบัญชีของ Prism แล้วนำเข้าเซสชันอีกครั้ง",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "นำเข้าเซสชัน Minecraft ปัจจุบันของ Prism แล้ว รีเฟรชและนำเข้าจาก Prism อีกครั้งเมื่อเซสชันหมดอายุ"
 }

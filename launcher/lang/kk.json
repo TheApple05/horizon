@@ -1121,5 +1121,14 @@
   "Claim for free": "Тегін алу",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Дүкеннің төлем провайдері сіздің елде қызмет көрсетпейді, сондықтан Құрылтайшы жиынтығын осында тегін ала аласыз.",
   "The Founder Set is yours.": "Құрылтайшы жиынтығы енді сіздікі.",
-  "Duplicate native mod id {id}.": "Жергілікті мод идентификаторы {id} қайталанды."
+  "Duplicate native mod id {id}.": "Жергілікті мод идентификаторы {id} қайталанды.",
+  "Could not open Prism's accounts file.": "Prism тіркелгілерінің файлын ашу мүмкін болмады.",
+  "Could not read Prism's accounts file.": "Prism тіркелгілерінің файлын оқу мүмкін болмады.",
+  "Prism's accounts file is too large.": "Prism тіркелгілерінің файлы тым үлкен.",
+  "Could not parse Prism's accounts file.": "Prism тіркелгілерінің файлын талдау мүмкін болмады.",
+  "Prism's accounts file has no accounts.": "Prism тіркелгілерінің файлында тіркелгілер жоқ.",
+  "Select one Microsoft account in Prism Launcher first.": "Алдымен Prism Launcher ішінде бір Microsoft тіркелгісін таңдаңыз.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism-де Minecraft сеансы жоқ. Алдымен Prism арқылы кіріңіз.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher-ді ашып, оның тіркелгісін жаңартыңыз, содан кейін оның сеансын қайта импорттаңыз.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism-нің ағымдағы Minecraft сеансы импортталды. Ол мерзімі біткенде Prism-ден жаңартып, қайта импорттаңыз."
 }

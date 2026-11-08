@@ -1121,5 +1121,14 @@
   "Claim for free": "Ricevi senpage",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "La pagoservo de la vendejo ne servas vian landon, do vi povas ricevi la Fondinto-aron ĉi tie senpage.",
   "The Founder Set is yours.": "La Fondinto-aro estas via.",
-  "Duplicate native mod id {id}.": "Duobla identigilo de denaska modifo {id}."
+  "Duplicate native mod id {id}.": "Duobla identigilo de denaska modifo {id}.",
+  "Could not open Prism's accounts file.": "Ne eblis malfermi la kontofajlon de Prism.",
+  "Could not read Prism's accounts file.": "Ne eblis legi la kontofajlon de Prism.",
+  "Prism's accounts file is too large.": "La kontofajlo de Prism estas tro granda.",
+  "Could not parse Prism's accounts file.": "Ne eblis analizi la kontofajlon de Prism.",
+  "Prism's accounts file has no accounts.": "La kontofajlo de Prism ne enhavas kontojn.",
+  "Select one Microsoft account in Prism Launcher first.": "Unue elektu unu Microsoft-konton en Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism ne havas Minecraft-seancolon. Unue ensalutu per Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Malfermu Prism Launcher, ĝisdatigu ĝian konton, poste denove importu ĝian seancon.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "La aktuala Minecraft-seancolo de Prism estis importita. Ĝisdatigu kaj reimportu el Prism kiam ĝi eksvalidiĝos."
 }

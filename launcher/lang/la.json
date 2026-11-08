@@ -1121,5 +1121,14 @@
   "Claim for free": "Gratis accipe",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ministrator solutionum tabernae terram tuam non servit, itaque Conditor set hic gratis accipere potes.",
   "The Founder Set is yours.": "Conditor set tuum est.",
-  "Duplicate native mod id {id}.": "ID modi nativi duplicatum {id}."
+  "Duplicate native mod id {id}.": "ID modi nativi duplicatum {id}.",
+  "Could not open Prism's accounts file.": "Fasciculus rationum Prism aperire non potuit.",
+  "Could not read Prism's accounts file.": "Fasciculus rationum Prism legi non potuit.",
+  "Prism's accounts file is too large.": "Fasciculus rationum Prism nimis magnus est.",
+  "Could not parse Prism's accounts file.": "Fasciculus rationum Prism resolvi non potuit.",
+  "Prism's accounts file has no accounts.": "Fasciculus rationum Prism rationes nullas habet.",
+  "Select one Microsoft account in Prism Launcher first.": "Primum unam rationem Microsoft in Prism Launcher elige.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism sessionem Minecraft non habet. Primum per Prism intra.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher aperi, rationem eius refice, deinde sessionem eius iterum importa.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Sessionem Minecraft praesentem Prism importavimus. Cum exspirat, ex Prism refice et iterum importa."
 }
