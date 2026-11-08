@@ -42,6 +42,18 @@ Never use another application's client ID (the official launcher's or another la
 
 ## Flow (launcher)
 
+### Import an existing Prism session
+
+`horizon-launcher account import-prism PATH_TO_PRISM_ACCOUNTS_JSON` imports the
+active Microsoft account's current Minecraft session. Ownership and profile are
+checked with Minecraft's services before Horizon stores the session in its normal
+credential store. Prism's file is read only; its Microsoft refresh token and OAuth
+application ID are never imported or used. This works without a Horizon app ID.
+
+This is a session import, not Microsoft sign-in or automatic renewal. When less
+than an hour remains, refresh the account in Prism and run the import again.
+Horizon's own Microsoft sign-in still requires the approved registration above.
+
 All requests use HTTPS and JSON except the two OAuth calls (form-encoded):
 
 1. **Device code**: `POST https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode`

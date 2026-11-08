@@ -106,6 +106,8 @@ enum ServersCmd {
 
 #[derive(Subcommand)]
 enum AccountCmd {
+    /// Import the active Prism account's current Minecraft session (refresh remains in Prism)
+    ImportPrism { accounts_file: PathBuf },
     /// The signed-in accounts and which one plays
     List,
     /// Sign in with a Microsoft account in your browser (device code). Play needs one that owns
@@ -1897,6 +1899,17 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
             .ok_or_else(|| format!("No signed-in account {who}. See `horizon-launcher account`."))
     };
     match action {
+        AccountCmd::ImportPrism { accounts_file } => {
+            let (account, secrets) =
+                account::prism::import(&account::Endpoints::live(), &accounts_file)?;
+            accounts.add(account::store(), account, &secrets)?;
+            accounts.save()?;
+            if as_json {
+                json(serde_json::json!({"imported": true}));
+            } else {
+                println!("{}", tr("Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires."));
+            }
+        }
         AccountCmd::List => {
             if as_json {
                 json(serde_json::json!({
