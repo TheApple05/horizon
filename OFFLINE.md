@@ -1,6 +1,6 @@
 # Offline testing fork
 
-Based on horizon-rust/horizon main at c98a51a. This is a local fork; nothing was uploaded.
+Based on horizon-rust/horizon main at c98a51a. Source branch: https://github.com/TheApple05/horizon/tree/offline-private (public). The Windows package and local player data are not uploaded.
 
 The client ignores Microsoft session files, stdin sessions and launcher account lists. Its default name is TestPlayer, even if HORIZON_PLAYER_NAME is inherited. Explicit --name remains available for offline multiplayer tests. Telemetry uploads are disabled in code. Default features include audio and controllers, without Horizon extras (Discord, friends, heartbeat, cosmetics and official server additions).
 
