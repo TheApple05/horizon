@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Zatiaľ nemáte žiadnu kozmetiku.",
   "Claim for free": "Získať zadarmo",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Platobná služba obchodu vo vašej krajine nefunguje, preto si Zakladateľskú súpravu môžete vyzdvihnúť tu zadarmo.",
-  "The Founder Set is yours.": "Zakladateľská súprava je vaša."
+  "The Founder Set is yours.": "Zakladateľská súprava je vaša.",
+  "Duplicate native mod id {id}.": "Duplicitné ID natívneho modu {id}."
 }

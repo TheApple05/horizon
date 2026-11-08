@@ -45,6 +45,18 @@ fn reads_the_sample_and_keeps_unknown_kinds() {
 }
 
 #[test]
+fn native_registry_accepts_combined_and_legacy_file_names() {
+    let mut index = sample();
+    index.projects[0].kind = Kind::NativeMod;
+    for name in ["coords_hud.hmod", "coords_hud.hnmod"] {
+        index.projects[0].versions[0].file.name = name.into();
+        assert!(Index::parse(&serde_json::to_string(&index).unwrap()).is_ok());
+    }
+    index.projects[0].versions[0].file.name = "coords_hud.zip".into();
+    assert!(index.check().unwrap_err().contains("plain file name"));
+}
+
+#[test]
 fn files_pass_against_their_entries() {
     let index = sample();
     let hmod = fixtures().join("coords_hud-0.1.0.hmod");

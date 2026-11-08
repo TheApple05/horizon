@@ -63,6 +63,42 @@ pub(super) fn register_standalone_models() {
     horizon_client::models::register_standalone(names);
 }
 
+fn content_paths(home: &std::path::Path, dev: &[PathBuf]) -> Vec<PathBuf> {
+    let dev_ids: std::collections::BTreeSet<_> = dev
+        .iter()
+        .filter_map(|p| horizon_mods::Package::read(p).ok().map(|m| m.manifest.id))
+        .collect();
+    let mut native: Vec<_> = std::fs::read_dir(home.join(mod_list::NATIVE_DIR))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            horizon_mods::index::native::is_file(p) && horizon_mods::Package::has_manifest(p)
+        })
+        .filter_map(|path| {
+            let id = horizon_mods::index::inspect(&horizon_mods::index::Kind::NativeMod, &path)
+                .ok()?
+                .id?;
+            (!dev_ids.contains(&id)).then_some((path, id))
+        })
+        .collect();
+    native.sort();
+    let ids: std::collections::BTreeSet<_> = native.iter().map(|(_, id)| id.clone()).collect();
+    let mut paths: Vec<_> = native.into_iter().map(|(path, _)| path).collect();
+    // A combined native update replaces the older content copy kept for a code-only native mod.
+    paths.extend(
+        horizon_mods::find(&home.join(mod_list::DIR))
+            .into_iter()
+            .filter(|p| {
+                !horizon_mods::Package::read(p).is_ok_and(|m| ids.contains(&m.manifest.id))
+            }),
+    );
+    paths.retain(|p| !dev.contains(p));
+    paths.extend(dev.iter().cloned());
+    paths
+}
+
 /// `root` with the content mods that are on layered over it
 /// (docs/modpacks.md): their blocks, items, data and assets. Read once at
 /// start, before the resources load; a mod whose content is refused is left
@@ -75,9 +111,7 @@ pub(super) fn content_root(
     use horizon_client::mod_content::{self, ContentMod};
     use horizon_mods::{Capability, Content, Package};
     let here = std::env::current_dir().unwrap_or_default();
-    let mut paths = horizon_mods::find(&here.join(mod_list::DIR));
-    paths.retain(|p| !dev.contains(p));
-    paths.extend(dev.iter().cloned());
+    let paths = content_paths(&here, dev);
     let mut known = None;
     let mut mods: Vec<ContentMod> = Vec::new();
     // The first load's list stays (`set_local`): a reload does not hash the files again.
@@ -320,7 +354,7 @@ fn not_built(dir: &std::path::Path, built: &str, rows: &[Installed]) -> Vec<Inst
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|d| d.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
+    paths.retain(|p| horizon_mods::index::native::is_file(p));
     paths.sort();
     let mut out: Vec<Installed> = Vec::new();
     for path in paths {
@@ -354,10 +388,7 @@ impl Game<'_> {
     /// mods don't run any more: their rows say so, and the player hears it once in the chat
     /// (`tell_native_now`).
     pub(super) fn start_mods(&mut self) {
-        let dir = Self::game_dir().join(mod_list::DIR);
-        let mut paths = horizon_mods::find(&dir);
-        paths.retain(|p| !self.mods.dev.contains(p));
-        paths.extend(self.mods.dev.iter().cloned());
+        let paths = content_paths(&Self::game_dir(), &self.mods.dev);
         self.settings.mods.installed = paths
             .iter()
             .map(|path| {
@@ -408,8 +439,18 @@ impl Game<'_> {
                     .any(|m| m.native.is_some()),
         );
         let native_dir = Self::game_dir().join(mod_list::NATIVE_DIR);
-        let unbuilt = not_built(&native_dir, &built, &self.settings.mods.installed);
-        self.settings.mods.installed.extend(unbuilt);
+        for row in not_built(&native_dir, &built, &[]) {
+            match self
+                .settings
+                .mods
+                .installed
+                .iter_mut()
+                .find(|m| m.id == row.id)
+            {
+                Some(content) => content.problem = row.problem,
+                None => self.settings.mods.installed.push(row),
+            }
+        }
         let installed = &self.settings.mods.installed;
         self.mods.stopped = installed
             .iter()
@@ -449,8 +490,14 @@ mod tests {
         assert!(build_lists_mods(r#"{"mods":[{"id":"worldmap"}]}"#));
     }
 
-    /// A minimal `.hnmod` the registry accepts: its manifest and its mixin's.
-    fn hnmod(dir: &std::path::Path, id: &str) {
+    /// Self-written native sources, optionally with content in the same package.
+    fn native_mod(
+        dir: &std::path::Path,
+        id: &str,
+        extension: &str,
+        content: bool,
+        extra: Option<(&str, &[u8])>,
+    ) {
         let horizon = "a".repeat(40);
         let manifest = serde_json::json!({
             "schema": 1, "id": id, "version": "0.3.0", "game": "26.3",
@@ -459,7 +506,7 @@ mod tests {
         let mixin = format!(
             "[mod]\nid = \"{id}\"\nversion = \"0.3.0\"\n[compatibility]\nhorizon_revision = \"{horizon}\"\n"
         );
-        let file = std::fs::File::create(dir.join(format!("{id}.hnmod"))).unwrap();
+        let file = std::fs::File::create(dir.join(format!("{id}.{extension}"))).unwrap();
         let mut zip = zip::ZipWriter::new(file);
         let options = zip::write::SimpleFileOptions::default();
         zip.start_file("horizon-native.json", options).unwrap();
@@ -467,6 +514,17 @@ mod tests {
         zip.start_file(format!("mixins/{id}/horizon-mixin.toml"), options)
             .unwrap();
         zip.write_all(mixin.as_bytes()).unwrap();
+        if content {
+            zip.start_file("horizon-mod.toml", options).unwrap();
+            write!(zip, "id = \"{id}\"\nname = \"Test mod\"\nversion = \"0.3.0\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\n").unwrap();
+            zip.start_file(format!("data/{id}/worldgen/biome/meadow.json"), options)
+                .unwrap();
+            zip.write_all(b"{\"temperature\":0.5}").unwrap();
+        }
+        if let Some((name, bytes)) = extra {
+            zip.start_file(name, options).unwrap();
+            zip.write_all(bytes).unwrap();
+        }
         zip.finish().unwrap();
     }
 
@@ -488,7 +546,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         for id in ["veinminer", "zoom", "minimap"] {
-            hnmod(&dir, id);
+            native_mod(
+                &dir,
+                id,
+                if id == "veinminer" { "hmod" } else { "hnmod" },
+                false,
+                None,
+            );
         }
         std::fs::write(dir.join("notes.txt"), "not a mod").unwrap();
         std::fs::write(dir.join("broken.hnmod"), "not a zip").unwrap();
@@ -512,5 +576,66 @@ mod tests {
         // No folder: no rows.
         assert!(not_built(&dir.join("missing"), "", &[]).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn combined_native_content_is_discovered_once_beside_legacy_code() {
+        let home =
+            std::env::temp_dir().join(format!("horizon-native-content-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let native = home.join(mod_list::NATIVE_DIR);
+        let content = home.join(mod_list::DIR);
+        std::fs::create_dir_all(&native).unwrap();
+        std::fs::create_dir_all(&content).unwrap();
+        native_mod(&native, "combined", "hmod", true, None);
+        native_mod(&native, "legacy", "hnmod", false, None);
+        let old = horizon_mods::Package::write_files("id = \"combined\"\nname = \"Old content\"\nversion = \"0.2.0\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\n", None, &[]).unwrap();
+        std::fs::write(content.join("combined.hmod"), &old).unwrap();
+        let paths = content_paths(&home, &[]);
+        assert_eq!(paths, [native.join("combined.hmod")]);
+        let package = horizon_mods::Package::read(&paths[0]).unwrap();
+        let data = horizon_mods::Content::read(&paths[0], &package.manifest).unwrap();
+        assert_eq!(
+            data.reader()
+                .unwrap()
+                .read("data/combined/worldgen/biome/meadow.json")
+                .unwrap(),
+            b"{\"temperature\":0.5}"
+        );
+        assert_eq!(not_built(&native, "", &[]).len(), 2);
+        let built = r#"{"mods":[{"id":"combined"},{"id":"legacy"}]}"#;
+        assert!(not_built(&native, built, &[]).is_empty());
+        assert!(
+            content.join("combined.hmod").is_file(),
+            "the old content copy is preserved"
+        );
+        let ordinary = horizon_mods::Package::write_files("id = \"ordinary\"\nname = \"Ordinary\"\nversion = \"0.2.0\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\n", None, &[]).unwrap();
+        for name in ["a.hmod", "b.hmod"] {
+            std::fs::write(content.join(name), &ordinary).unwrap();
+        }
+        native_mod(
+            &native,
+            "ordinary",
+            "hmod",
+            true,
+            Some(("build.sh", b"invalid native source")),
+        );
+        let paths = content_paths(&home, &[]);
+        assert_eq!(
+            paths,
+            [
+                native.join("combined.hmod"),
+                content.join("a.hmod"),
+                content.join("b.hmod")
+            ],
+            "invalid native sources cannot contribute content or hide ordinary duplicates"
+        );
+        let dev = content.join("combined.hmod");
+        assert_eq!(
+            content_paths(&home, std::slice::from_ref(&dev)),
+            [content.join("a.hmod"), content.join("b.hmod"), dev],
+            "explicit dev content keeps its remove-then-append order"
+        );
+        std::fs::remove_dir_all(&home).unwrap();
     }
 }

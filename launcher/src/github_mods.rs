@@ -636,7 +636,8 @@ pub fn origins(home: &Path) -> Vec<Origin> {
 /// is (that is how it updates).
 pub fn install(home: &Path, found: &Resolved, packed: &Packed) -> Result<Origin, String> {
     let target = home.join(INSTALLED).join(format!("{}.hnmod", packed.id));
-    if target.exists() && origin(home, &packed.id).is_none() {
+    let alternate = home.join(INSTALLED).join(format!("{}.hmod", packed.id));
+    if alternate.exists() || target.exists() && origin(home, &packed.id).is_none() {
         return Err(format!(
             "{} is already installed and not from GitHub: remove it first.",
             packed.id

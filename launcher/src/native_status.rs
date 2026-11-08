@@ -15,7 +15,9 @@ pub type Mod = (String, String, Option<String>);
 /// Whether an installed file (`installed::Entry::file`) is a native mod.
 pub fn is_native_file(file: &str) -> bool {
     file.strip_prefix(native_mods::INSTALLED)
-        .is_some_and(|rest| rest.starts_with('/') && rest.ends_with(".hnmod"))
+        .is_some_and(|rest| {
+            rest.starts_with('/') && horizon_mods::index::native::is_file(Path::new(rest))
+        })
 }
 
 /// Where an instance's native mods stand.
@@ -113,7 +115,7 @@ pub fn horizon_label(version: &str) -> String {
     }
 }
 
-/// The native mods turned on in game folder `home`, read from their `.hnmod`s. One that can't be
+/// The native mods turned on in game folder `home`, read from their packages. One that can't be
 /// read always counts, with its file name and no version, so it needs a build (which says why):
 /// the on/off list is keyed by the manifest id, which an unreadable file can't give.
 pub fn enabled(home: &Path) -> Vec<Mod> {
@@ -227,7 +229,7 @@ fn hnmods(home: &Path) -> Vec<std::path::PathBuf> {
     let mut paths: Vec<_> = fs::read_dir(home.join(native_mods::INSTALLED))
         .map(|dir| dir.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
+    paths.retain(|p| horizon_mods::index::native::is_file(p));
     paths.sort();
     paths
 }
@@ -457,6 +459,7 @@ mod tests {
     #[test]
     fn only_hnmods_in_the_native_folder_are_native() {
         assert!(is_native_file("horizon-native-mods/veinminer.hnmod"));
+        assert!(is_native_file("horizon-native-mods/veinminer.hmod"));
         assert!(!is_native_file("horizon-native-mods-old/x.hnmod"));
         assert!(!is_native_file("horizon-mods/zoom.hmod"));
         assert!(!is_native_file("resourcepacks/x.zip"));

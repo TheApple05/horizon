@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "У вас пока нет косметики.",
   "Claim for free": "Получить бесплатно",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Платёжный сервис магазина не работает в вашей стране, поэтому Набор основателя можно получить здесь бесплатно.",
-  "The Founder Set is yours.": "Набор основателя теперь ваш."
+  "The Founder Set is yours.": "Набор основателя теперь ваш.",
+  "Duplicate native mod id {id}.": "Дублирующийся идентификатор нативного мода {id}."
 }

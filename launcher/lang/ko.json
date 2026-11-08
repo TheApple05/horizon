@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "아직 코스메틱이 없습니다.",
   "Claim for free": "무료로 받기",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "상점의 결제 서비스가 회원님의 국가를 지원하지 않으므로 창립자 세트를 여기에서 무료로 받을 수 있습니다.",
-  "The Founder Set is yours.": "창립자 세트를 받았습니다."
+  "The Founder Set is yours.": "창립자 세트를 받았습니다.",
+  "Duplicate native mod id {id}.": "네이티브 모드 ID {id}이(가) 중복됩니다."
 }

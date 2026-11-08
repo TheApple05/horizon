@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Wala ka pang pampaganda.",
   "Claim for free": "Kunin nang libre",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Hindi nagseserbisyo sa bansa mo ang payment provider ng shop, kaya puwede mong kunin dito nang libre ang Set ng founder.",
-  "The Founder Set is yours.": "Sa iyo na ang Set ng founder."
+  "The Founder Set is yours.": "Sa iyo na ang Set ng founder.",
+  "Duplicate native mod id {id}.": "Doble ang native na mod ID {id}."
 }

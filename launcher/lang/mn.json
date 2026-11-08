@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Танд одоогоор гоо сайхны бүтээгдэхүүн алга.",
   "Claim for free": "Үнэгүй авах",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Дэлгүүрийн төлбөрийн үйлчилгээ таны улсад ажилладаггүй тул Үүсгэн байгуулагчийн багцыг эндээс үнэгүй авч болно.",
-  "The Founder Set is yours.": "Үүсгэн байгуулагчийн багц таных боллоо."
+  "The Founder Set is yours.": "Үүсгэн байгуулагчийн багц таных боллоо.",
+  "Duplicate native mod id {id}.": "Эх модны ID {id} давхардсан байна."
 }

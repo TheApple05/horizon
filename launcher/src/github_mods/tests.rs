@@ -392,14 +392,23 @@ fn installing_records_the_origin_and_updates_follow_releases_or_the_head() {
         }
     ));
     // A file that isn't from GitHub is never replaced.
-    write(&home.join(INSTALLED).join("keys.hnmod"), "x");
     let other = Packed {
         id: "keys".into(),
         ..packed("keys")
     };
-    assert!(install(&home, &newer, &other)
-        .unwrap_err()
-        .contains("not from GitHub"));
+    for extension in ["hmod", "hnmod"] {
+        let path = home.join(INSTALLED).join(format!("keys.{extension}"));
+        write(&path, "my existing mod");
+        assert!(install(&home, &newer, &other)
+            .unwrap_err()
+            .contains("not from GitHub"));
+        assert_eq!(fs::read(&path).unwrap(), b"my existing mod");
+        assert!(self::origin(&home, "keys").is_none());
+        if extension == "hmod" {
+            assert!(!home.join(INSTALLED).join("keys.hnmod").exists());
+        }
+        fs::remove_file(path).unwrap();
+    }
     assert!(remove(&home, "zoom").unwrap());
     assert!(!remove(&home, "zoom").unwrap());
     assert!(!home.join(INSTALLED).join("zoom.hnmod").exists());

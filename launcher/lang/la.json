@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Nondum ullos fucos habes.",
   "Claim for free": "Gratis accipe",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ministrator solutionum tabernae terram tuam non servit, itaque Conditor set hic gratis accipere potes.",
-  "The Founder Set is yours.": "Conditor set tuum est."
+  "The Founder Set is yours.": "Conditor set tuum est.",
+  "Duplicate native mod id {id}.": "ID modi nativi duplicatum {id}."
 }

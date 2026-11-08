@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Encara no tens cap cosmètic.",
   "Claim for free": "Aconsegueix-lo gratis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "El proveïdor de pagaments de la botiga no dona servei al teu país, així que pots aconseguir el Conjunt del fundador aquí gratis.",
-  "The Founder Set is yours.": "El Conjunt del fundador és teu."
+  "The Founder Set is yours.": "El Conjunt del fundador és teu.",
+  "Duplicate native mod id {id}.": "ID de mod natiu duplicat {id}."
 }

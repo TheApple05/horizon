@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Һеҙҙә әлегә бер косметика ла юҡ.",
   "Claim for free": "Бушлай алыу",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Магазиндың түләү хеҙмәте һеҙҙең илдә эшләмәй, шуға күрә Нигеҙ һалыусылар йыйылмаһын бында бушлай ала алаһығыҙ.",
-  "The Founder Set is yours.": "Нигеҙ һалыусылар йыйылмаһы — һеҙҙеке."
+  "The Founder Set is yours.": "Нигеҙ һалыусылар йыйылмаһы — һеҙҙеке.",
+  "Duplicate native mod id {id}.": "Төп модулдең ҡабатланған идентификаторы {id}."
 }

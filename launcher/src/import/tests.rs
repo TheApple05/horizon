@@ -56,6 +56,69 @@ fn maker(root: &Path) -> impl Fn(&str) -> Result<Instance, String> + '_ {
 
 const NONE: &dyn Fn(&str, f32) = &|_, _| {};
 
+#[test]
+fn native_source_archives_roundtrip_without_builds_or_accounts() {
+    let dir = scratch("native-roundtrip");
+    let home = dir.join("from");
+    for (id, extension) in [("terrain", "hmod"), ("legacy", "hnmod")] {
+        let manifest = serde_json::to_vec(&serde_json::json!({
+            "schema": 1, "id": id, "version": "1", "game": "26.3",
+            "horizon": "a".repeat(40), "mixins": "b".repeat(40),
+        }))
+        .unwrap();
+        let mixin = format!(
+            "[mod]\nid = \"{id}\"\nversion = \"1\"\n[compatibility]\nhorizon_revision = \"{}\"\n",
+            "a".repeat(40)
+        );
+        let prefix = format!("mixins/{id}");
+        let path = home.join(format!("horizon-native-mods/{id}.{extension}"));
+        zip_file(
+            &path,
+            &[
+                ("horizon-native.json", &manifest),
+                (&format!("{prefix}/horizon-mixin.toml"), mixin.as_bytes()),
+                (&format!("{prefix}/terrain.rs"), b"pub fn terrain() {}\n"),
+                (&format!("{prefix}/data/table.bin"), b"\x00\xff\x01\x80"),
+            ],
+        );
+        horizon_mods::index::native::Bundle::read(&path).unwrap();
+    }
+    put(&home.join("horizon-mods.txt"), b"mod.terrain:true\n");
+    for private in [
+        "versions/native-terrain/horizon-client.exe",
+        "native-mods/target/debug/horizon-client",
+        "accounts.json",
+        "session.json",
+        "horizon-player.txt",
+    ] {
+        put(&home.join(private), b"private");
+    }
+    for format in [Format::Mrpack, Format::Zip] {
+        let out = dir.join(format!("Sources.{}", format.extension()));
+        let done = export(&home, "Sources", format, &[], &[], &out).unwrap();
+        assert_eq!(
+            done.copied, 3,
+            "only installed source archives and mod settings"
+        );
+        let instance = import_into(&out, NONE, &maker(&dir.join("instances"))).unwrap();
+        for file in [
+            "horizon-native-mods/terrain.hmod",
+            "horizon-native-mods/legacy.hnmod",
+            "horizon-mods.txt",
+        ] {
+            assert_eq!(
+                fs::read(instance.home.join(file)).unwrap(),
+                fs::read(home.join(file)).unwrap(),
+                "{file}"
+            );
+        }
+        assert!(crate::browser::java::is_enabled(&instance.home, "terrain"));
+        assert!(!crate::browser::java::is_enabled(&instance.home, "legacy"));
+        assert_eq!(fs::read_dir(&instance.home).unwrap().count(), 2);
+    }
+    fs::remove_dir_all(&dir).unwrap();
+}
+
 /// Bytes `build_import::is_game` accepts as a game build: this platform's
 /// executable magic followed by the mod API mark every Horizon program
 /// carries. Not a real program -- `what` only has to recognise one.
@@ -132,6 +195,14 @@ fn says_what_a_dropped_file_is() {
             zip_file(
                 &p,
                 &[("options.txt", b"lang:fr_ch\n"), ("saves/W/level.dat", b"")],
+            );
+            (p, Ok(Dropped::Instance))
+        },
+        {
+            let p = dir.join("native-only.zip");
+            zip_file(
+                &p,
+                &[("horizon-native-mods/terrain.hmod", b"source archive")],
             );
             (p, Ok(Dropped::Instance))
         },

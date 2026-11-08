@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Sul pole veel ühtegi kosmeetikaeset.",
   "Claim for free": "Hangi tasuta",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Poe makseteenuse pakkuja sinu riigis ei tegutse, seega saad Asutaja komplekti siit tasuta.",
-  "The Founder Set is yours.": "Asutaja komplekt on sinu."
+  "The Founder Set is yours.": "Asutaja komplekt on sinu.",
+  "Duplicate native mod id {id}.": "Korduv natiivse modi ID {id}."
 }

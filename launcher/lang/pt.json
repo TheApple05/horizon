@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Ainda não tens nenhum cosmético.",
   "Claim for free": "Obter grátis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "O fornecedor de pagamentos da loja não opera no seu país, por isso pode obter aqui o Conjunto de fundador gratuitamente.",
-  "The Founder Set is yours.": "O Conjunto de fundador é seu."
+  "The Founder Set is yours.": "O Conjunto de fundador é seu.",
+  "Duplicate native mod id {id}.": "ID do mod nativo duplicado {id}."
 }

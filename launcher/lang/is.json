@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Þú átt engar snyrtivörur ennþá.",
   "Claim for free": "Sækja ókeypis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Greiðsluþjónusta verslunarinnar þjónar ekki þínu landi, svo þú getur sótt Stofnandi settið hér ókeypis.",
-  "The Founder Set is yours.": "Stofnandi settið er þitt."
+  "The Founder Set is yours.": "Stofnandi settið er þitt.",
+  "Duplicate native mod id {id}.": "Tvítekið auðkenni innbyggðs mods {id}."
 }

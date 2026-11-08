@@ -1120,5 +1120,6 @@
   "You don't own any cosmetics yet.": "Weli ma haysatid waxyaalo la isku qurxiyo.",
   "Claim for free": "Hel lacag la'aan",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Bixiyaha lacag-bixinta dukaanku kama shaqeeyo dalkaaga, sidaas darteed waxaad halkan ka heli kartaa Aasaasaha dhigay lacag la'aan.",
-  "The Founder Set is yours.": "Aasaasaha dhigay waa kaaga."
+  "The Founder Set is yours.": "Aasaasaha dhigay waa kaaga.",
+  "Duplicate native mod id {id}.": "Aqoonsiga mod asli ah oo labanlaab ah {id}."
 }
