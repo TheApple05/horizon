@@ -1,7 +1,11 @@
 //! Horizon: native Rust client for Minecraft Java Edition 26.3 gameplay.
 #![forbid(unsafe_code)]
 
-#[cfg(not(any(feature = "system-allocator", feature = "alloc-census")))]
+// Windows GNU mimalloc retains private commit across repeated region changes.
+#[cfg(all(
+    not(any(feature = "system-allocator", feature = "alloc-census")),
+    not(all(target_os = "windows", target_env = "gnu"))
+))]
 #[global_allocator]
 static ALLOCATOR: horizon_threads::Allocator = horizon_threads::ALLOCATOR;
 #[cfg(all(feature = "alloc-census", not(feature = "system-allocator")))]
