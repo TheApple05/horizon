@@ -13,7 +13,9 @@ def main():
     parser.add_argument('resources', type=Path)
     args = parser.parse_args()
     binary, resources = args.binary.resolve(), args.resources.resolve()
-    scratch = Path(tempfile.mkdtemp(prefix='offline-qa-', dir=Path('.local').resolve()))
+    local = Path('.local').resolve()
+    local.mkdir(exist_ok=True)
+    scratch = Path(tempfile.mkdtemp(prefix='offline-qa-', dir=local))
     session = scratch / 'synthetic-session.json'
     contents = json.dumps(dict(name='PrivateCanary', uuid='0' * 31 + '1',
                                access_token='synthetic-not-a-real-token', user_type='msa'))
