@@ -44,7 +44,7 @@ pub enum Kind {
     /// A `.hmod` of content only.
     Mod,
     /// A source-only native mixin bundle, compiled into an isolated game build. Published as an
-    /// `.hnmod` until launchers and the game read native `.hmod`s (#5865, docs/api/mod-files.md).
+    /// `.hnmod` for older launchers, or `.hmod` with optional content (docs/api/mod-files.md).
     NativeMod,
     /// A `.hpack`: registry mods played together as a profile.
     Modpack,
@@ -276,7 +276,8 @@ impl Index {
                 let extension_ok = p
                     .kind
                     .extension()
-                    .is_none_or(|e| f.name.ends_with(&format!(".{e}")));
+                    .is_none_or(|e| f.name.ends_with(&format!(".{e}")))
+                    || p.kind == Kind::NativeMod && f.name.ends_with(".hmod");
                 if !plain_name(&f.name) || !extension_ok {
                     return Err(at(format!(
                         "{:?} is not a plain file name for a {}",

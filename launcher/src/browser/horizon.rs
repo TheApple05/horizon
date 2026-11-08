@@ -7,6 +7,7 @@ use super::{
     details::{Details, Link},
     download, installed, java, FileRef, Kind, Project, Query, Source, SourceId, Version, GAME,
 };
+use crate::i18n::trf;
 use horizon_mods::index::{self, Index, Trust};
 use std::collections::HashMap;
 use std::fs;
@@ -651,13 +652,23 @@ fn install_version(
     }
     let native = p.kind == index::Kind::NativeMod;
     let relative = match native {
-        true => format!("{}/{}.hnmod", crate::native_mods::INSTALLED, p.id),
+        true => {
+            let extension = if v.file.name.ends_with(".hmod") {
+                "hmod"
+            } else {
+                "hnmod"
+            };
+            format!("{}/{}.{extension}", crate::native_mods::INSTALLED, p.id)
+        }
         false => relative(project.kind, &p.id, &v.file.name)?,
     };
     let mut list = installed::Installed::load(home);
     let ours = |e: &installed::Entry| e.source == SourceId::Horizon && e.project == p.id;
     let old = list.entries.iter().find(|e| ours(e)).cloned();
-    if old.as_ref().is_some_and(|o| o.version == v.version) {
+    if old
+        .as_ref()
+        .is_some_and(|o| o.version == v.version && o.file == relative)
+    {
         return Ok(old.expect("checked"));
     }
     let target = home.join(&relative);
@@ -670,6 +681,20 @@ fn install_version(
         ));
     }
     let clash = target.exists() && old.as_ref().is_none_or(|o| o.file != relative);
+    if native {
+        for extension in ["hmod", "hnmod"] {
+            let other = format!("{}/{}.{extension}", crate::native_mods::INSTALLED, p.id);
+            if other != relative
+                && home.join(&other).exists()
+                && old.as_ref().is_none_or(|o| o.file != other)
+            {
+                return Err(trf(
+                    "{file} is already there: move it away first.",
+                    &[("file", &other)],
+                ));
+            }
+        }
+    }
     if project.kind == Kind::Mod && (clash || (!native && folder_mod.exists())) {
         return Err(format!(
             "A mod with the id {} is already in {}: move it away first.",
@@ -701,10 +726,13 @@ fn install_version(
         fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     fs::rename(&path, &target).map_err(|e| format!("{}: {e}", target.display()))?;
-    if let Some(old) = old
-        .as_ref()
-        .filter(|o| o.file != relative && !stays(native, &o.file))
-    {
+    if let Some(old) = old.as_ref().filter(|o| {
+        o.file != relative
+            && !stays(
+                native && !horizon_mods::Package::has_manifest(&target),
+                &o.file,
+            )
+    }) {
         let _ = fs::remove_file(home.join(&old.file));
     }
     if project.kind == Kind::Mod {
@@ -739,14 +767,17 @@ fn install_version(
 /// keeps its `.hmod` until the player builds the game with the new version. The game runs it
 /// meanwhile and skips it once the native one is built in; removing the mod removes both.
 fn stays(native: bool, old: &str) -> bool {
-    native && old.ends_with(".hmod")
+    native && old.starts_with("horizon-mods/") && old.ends_with(".hmod")
 }
 
 /// The mod id of an installed mod (`horizon-mods/<id>`, `horizon-mods/<id>.hmod` or
-/// `horizon-native-mods/<id>.hnmod`).
+/// `horizon-native-mods/<id>.hmod` or `<id>.hnmod`).
 pub fn mod_id(entry: &installed::Entry) -> Option<&str> {
     if let Some(rest) = entry.file.strip_prefix(crate::native_mods::INSTALLED) {
-        return rest.strip_prefix('/')?.strip_suffix(".hnmod");
+        let rest = rest.strip_prefix('/')?;
+        return rest
+            .strip_suffix(".hmod")
+            .or_else(|| rest.strip_suffix(".hnmod"));
     }
     let rest = entry.file.strip_prefix(java::MODS_DIR)?.strip_prefix('/')?;
     Some(rest.strip_suffix(".hmod").unwrap_or(rest))

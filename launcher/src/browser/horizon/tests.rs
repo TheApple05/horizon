@@ -60,6 +60,10 @@ fn native_registry_entries_are_mods_that_say_they_run_native_code() {
         Some("veinminer")
     );
     assert_eq!(mod_id(&entry("horizon-mods/zoom.hmod")), Some("zoom"));
+    assert_eq!(
+        mod_id(&entry("horizon-native-mods/veinminer.hmod")),
+        Some("veinminer")
+    );
 }
 
 #[test]
@@ -187,6 +191,7 @@ fn a_mod_that_turned_native_keeps_its_hmod_until_removed() {
     assert!(stays(true, "horizon-mods/coords_hud.hmod"));
     assert!(!stays(false, "horizon-mods/coords_hud.hmod"));
     assert!(!stays(true, "horizon-native-mods/coords_hud.hnmod"));
+    assert!(!stays(true, "horizon-native-mods/coords_hud.hmod"));
     let index = sample();
     let home = scratch("turned-native");
     put(&index, true, &home).unwrap();
@@ -199,6 +204,117 @@ fn a_mod_that_turned_native_keeps_its_hmod_until_removed() {
     installed::remove(&home, "coords_hud").unwrap();
     assert!(!home.join("horizon-native-mods/coords_hud.hnmod").exists());
     assert!(!home.join("horizon-mods/coords_hud.hmod").exists());
+    fs::remove_dir_all(&home).unwrap();
+}
+
+fn native_registry(dir: &Path, extension: &str, version: &str, content: bool) -> Index {
+    use std::io::Write;
+    fs::create_dir_all(dir).unwrap();
+    let path = dir.join(format!("demo.{extension}"));
+    let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+    let options = zip::write::SimpleFileOptions::default();
+    let horizon = "a".repeat(40);
+    let mixins = "b".repeat(40);
+    zip.start_file("horizon-native.json", options).unwrap();
+    zip.write_all(
+        serde_json::json!({
+            "schema": 1, "id": "demo", "version": version, "game": "26.3",
+            "horizon": horizon, "mixins": mixins,
+        })
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap();
+    zip.start_file("mixins/demo/horizon-mixin.toml", options)
+        .unwrap();
+    write!(zip, "[mod]\nid = \"demo\"\nversion = \"{version}\"\n[compatibility]\nhorizon_revision = \"{horizon}\"\n").unwrap();
+    if content {
+        zip.start_file("horizon-mod.toml", options).unwrap();
+        write!(zip, "id = \"demo\"\nname = \"Demo\"\nversion = \"{version}\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\n").unwrap();
+        zip.start_file("data/demo/worldgen/biome/meadow.json", options)
+            .unwrap();
+        zip.write_all(b"{\"temperature\":0.5}").unwrap();
+    }
+    zip.finish().unwrap();
+    let url = format!(
+        "file:///{}",
+        path.display()
+            .to_string()
+            .replace('\\', "/")
+            .trim_start_matches('/')
+    );
+    Index::parse_local(&serde_json::json!({
+        "schema": 1,
+        "projects": [{
+            "id": "demo", "kind": "native-mod", "name": "Demo", "summary": "Test native mod",
+            "license": "MIT", "source": "https://example.org/demo",
+            "versions": [{
+                "version": version, "api": format!("native-1/{horizon}/{mixins}"), "game": "26.3",
+                "file": { "name": format!("demo.{extension}"), "url": url,
+                    "size": fs::metadata(&path).unwrap().len(), "sha256": index::sha256_file(&path).unwrap() }
+            }]
+        }]
+    }).to_string()).unwrap()
+}
+
+#[test]
+fn native_install_keeps_combined_bytes_and_migrates_the_legacy_extension() {
+    let home = scratch("combined-native");
+    let source = home.join("source");
+    let legacy = native_registry(&source, "hnmod", "0.3.0", false);
+    let p = project_of(&legacy.projects[0]).unwrap();
+    let first = install_from(&legacy, true, None, &p, &home, &|_, _| {}).unwrap();
+    assert_eq!(first[0].file, "horizon-native-mods/demo.hnmod");
+    assert!(java::is_enabled(&home, "demo"));
+
+    let combined = native_registry(&source, "hmod", "0.3.0", true);
+    let bytes = fs::read(source.join("demo.hmod")).unwrap();
+    let done = install_from(&combined, true, None, &p, &home, &|_, _| {}).unwrap();
+    assert_eq!(done[0].file, "horizon-native-mods/demo.hmod");
+    assert_eq!(fs::read(home.join(&done[0].file)).unwrap(), bytes);
+    assert!(!home.join(&first[0].file).exists());
+    let path = home.join(&done[0].file);
+    assert_eq!(
+        index::native::Bundle::read(&path).unwrap().manifest.id,
+        "demo"
+    );
+    let package = horizon_mods::Package::read(&path).unwrap();
+    let content = horizon_mods::Content::read(&path, &package.manifest).unwrap();
+    assert_eq!(
+        content
+            .reader()
+            .unwrap()
+            .read("data/demo/worldgen/biome/meadow.json")
+            .unwrap(),
+        b"{\"temperature\":0.5}"
+    );
+    assert_eq!(crate::native_status::enabled(&home)[0].0, "demo");
+
+    let next = native_registry(&source, "hmod", "0.4.0", true);
+    fs::write(source.join("demo.hmod"), b"tampered").unwrap();
+    assert!(install_from(&next, true, None, &p, &home, &|_, _| {}).is_err());
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        bytes,
+        "a refused update keeps the installed package"
+    );
+    installed::remove(&home, "demo").unwrap();
+    assert!(!path.exists());
+    assert!(!java::is_enabled(&home, "demo"));
+    fs::remove_dir_all(&home).unwrap();
+}
+
+#[test]
+fn native_install_refuses_an_untracked_copy_with_the_other_extension() {
+    let home = scratch("native-extension-clash");
+    let index = native_registry(&home.join("source"), "hmod", "0.3.0", true);
+    fs::create_dir_all(home.join("horizon-native-mods")).unwrap();
+    let other = home.join("horizon-native-mods/demo.hnmod");
+    fs::write(&other, b"my existing mod").unwrap();
+    let p = project_of(&index.projects[0]).unwrap();
+    assert!(install_from(&index, true, None, &p, &home, &|_, _| {}).is_err());
+    assert_eq!(fs::read(&other).unwrap(), b"my existing mod");
+    assert!(!home.join("horizon-native-mods/demo.hmod").exists());
     fs::remove_dir_all(&home).unwrap();
 }
 

@@ -3607,6 +3607,12 @@ fn worlds(action: WorldsCmd, as_json: bool) -> Result<(), String> {
     Ok(())
 }
 
+fn modpack_instance(work: &Path, all: Vec<instances::Instance>) -> Option<instances::Instance> {
+    let work = work.canonicalize().ok()?;
+    all.into_iter()
+        .find(|i| i.work.canonicalize().is_ok_and(|path| path == work))
+}
+
 fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
     use horizon_launcher::browser::horizon;
     use horizon_launcher::modpacks::{self, Imported};
@@ -3689,9 +3695,22 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
             )?)
         }
         ModpackCmd::Play { pack, version } => {
-            let mut cmd = backend::client(&backend::resolve_version(version.as_deref())?)?;
-            modpacks::apply_profile(&mut cmd, &work(&pack)?)?;
-            attached(cmd)?
+            let work = work(&pack)?;
+            let instance = modpack_instance(&work, instances::list())
+                .ok_or_else(|| trf("No instance plays {pack}.", &[("pack", &pack)]))?;
+            return execute(
+                Cmd::Play {
+                    version,
+                    instance: Some(instance.id),
+                    world: None,
+                    creative: false,
+                    join: None,
+                    server: None,
+                    arg: Vec::new(),
+                    account: None,
+                },
+                as_json,
+            );
         }
         ModpackCmd::Remove { pack } => modpacks::remove(&work(&pack)?)?,
     }
@@ -3702,6 +3721,33 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    #[cfg(windows)]
+    fn modpack_play_keeps_the_pinned_instance_with_different_path_casing() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-cli-pack-case-{}", std::process::id()));
+        let work = root.join("cozy");
+        std::fs::create_dir_all(&work).unwrap();
+        let instance = instances::Instance {
+            id: "pack:cozy".into(),
+            name: "Cozy".into(),
+            kind: instances::Kind::Pack,
+            work: work.clone(),
+            home: work.join("home"),
+            icon: None,
+            group: None,
+            version: Some("native-pinned-build".into()),
+            played: Default::default(),
+            last_played: None,
+            launch: Default::default(),
+            java: None,
+        };
+        let resolved = modpack_instance(&root.join("COZY"), vec![instance]).unwrap();
+        assert_eq!(resolved.id, "pack:cozy");
+        assert_eq!(resolved.version.as_deref(), Some("native-pinned-build"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn completions_cover_each_shell_and_nested_commands() {

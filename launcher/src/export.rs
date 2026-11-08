@@ -28,7 +28,13 @@ pub const FILES: [&str; 6] = [
     "servers.dat",
 ];
 /// Its folders of packs, mods and their settings.
-pub const FOLDERS: [&str; 4] = ["resourcepacks", "shaderpacks", "horizon-mods", "config"];
+pub const FOLDERS: [&str; 5] = [
+    "resourcepacks",
+    "shaderpacks",
+    "horizon-mods",
+    "horizon-native-mods",
+    "config",
+];
 /// What a world keeps per player: left out.
 const PER_PLAYER: [&str; 4] = ["playerdata", "stats", "advancements", "session.lock"];
 const INDEX: &str = "modrinth.index.json";

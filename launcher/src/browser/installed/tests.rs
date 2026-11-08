@@ -120,6 +120,36 @@ fn home(name: &str) -> PathBuf {
 const NONE: &dyn Fn(&str, f32) = &|_, _| {};
 
 #[test]
+fn removing_either_native_extension_also_removes_preserved_content() {
+    let home = home("native-remove");
+    fs::create_dir_all(home.join("horizon-native-mods")).unwrap();
+    fs::create_dir_all(home.join("horizon-mods")).unwrap();
+    for extension in ["hmod", "hnmod"] {
+        let file = format!("horizon-native-mods/terrain.{extension}");
+        fs::write(home.join(&file), b"native sources").unwrap();
+        fs::write(home.join("horizon-mods/terrain.hmod"), b"old content").unwrap();
+        let entry = serde_json::from_value(serde_json::json!({
+            "source": "horizon", "project": "terrain", "slug": "terrain", "title": "Terrain",
+            "kind": "mod", "version": "1", "number": "1", "file": file,
+            "checksum": "", "page": "",
+        }))
+        .unwrap();
+        Installed {
+            entries: vec![entry],
+        }
+        .save(&home)
+        .unwrap();
+        super::super::java::set_enabled(&home, "terrain", true).unwrap();
+        remove(&home, "terrain").unwrap();
+        assert!(!home.join(&file).exists());
+        assert!(!home.join("horizon-mods/terrain.hmod").exists());
+        assert!(!super::super::java::is_enabled(&home, "terrain"));
+        assert!(Installed::load(&home).entries.is_empty());
+    }
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn installs_with_dependencies_then_updates_and_removes() {
     let home = home("cycle");
     let mut fake = Fake::default();
