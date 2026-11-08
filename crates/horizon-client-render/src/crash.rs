@@ -461,19 +461,12 @@ fn panic_message(info: &std::panic::PanicHookInfo) -> String {
 /// (`from_panic`), it starts at the frame that panicked: the hook's and the panic machinery's
 /// frames go. Paths inside the workspace lose the build machine's prefix.
 pub fn stack_lines(backtrace: &str, from_panic: bool) -> String {
-    // The workspace as it was on the machine that built this binary (it need not exist here).
-    // A report names workspace files the same way on every host, whatever
-    // separator the build machine used.
-    let manifest = env!("CARGO_MANIFEST_DIR").replace('\\', "/");
-    let root = manifest
-        .strip_suffix("crates/horizon-client-render")
-        .unwrap_or(&manifest);
     let mut frames: Vec<(String, Option<String>)> = Vec::new();
     for line in backtrace.lines() {
         let line = line.trim();
         if let Some(at) = line.strip_prefix("at ") {
             if let Some(frame) = frames.last_mut() {
-                frame.1 = Some(short_path(&at.replace('\\', "/"), root).to_owned());
+                frame.1 = Some(short_path(&at.replace('\\', "/")).to_owned());
             }
         } else if let Some((n, name)) = line.split_once(": ")
             && n.chars().all(|c| c.is_ascii_digit())
@@ -521,9 +514,9 @@ pub fn stack_lines(backtrace: &str, from_panic: bool) -> String {
 
 /// A source path without the build machine's folders: relative to the workspace, or from the
 /// crate's folder for dependencies (`winit-0.30.13/src/event_loop.rs:642:56`).
-fn short_path<'a>(path: &'a str, root: &str) -> &'a str {
-    if let Some(rest) = path.strip_prefix(root) {
-        return rest;
+fn short_path(path: &str) -> &str {
+    if let Some(i) = path.find("/crates/horizon-") {
+        return &path[i + 1..];
     }
     if let Some(i) = path.find("/registry/src/") {
         let rest = &path[i + "/registry/src/".len()..];
@@ -806,6 +799,18 @@ mod tests {
         assert!(has("client"));
         assert!(!has("server"));
         clear_detail("Render Settings");
+    }
+
+    #[test]
+    fn stack_paths_do_not_need_the_build_users_directory() {
+        assert_eq!(
+            short_path("C:/Users/Example/project/crates/horizon-client/src/main.rs:1:2"),
+            "crates/horizon-client/src/main.rs:1:2"
+        );
+        assert_eq!(
+            short_path("/home/example/.cargo/registry/src/index/winit-1/src/lib.rs:1:2"),
+            "winit-1/src/lib.rs:1:2"
+        );
     }
 
     #[test]

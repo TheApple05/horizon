@@ -10,3 +10,5 @@ This provides offline play and access to offline-mode test servers. It does not 
 
 Build: cargo build --release --locked -p horizon-client --bin horizon-client
 The delivered build disables LTO for faster linking, uses 16 codegen units and strips symbols. Rust paths under the build user's profile are remapped to /build. No account stores, worlds, logs, prepared game resources or debug symbols are packaged.
+
+Crash stack traces shorten workspace paths without embedding the build machine directory. Verify with tools/test_offline_fork.py BINARY RESOURCES; telemetry endpoint coverage is in horizon-telemetry, and path-shortening coverage is in the renderer crash tests.
