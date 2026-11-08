@@ -1121,5 +1121,14 @@
   "Claim for free": "Klaim gratis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Penyedia pembayaran toko tidak melayani negaramu, jadi kamu bisa mengklaim Set pendiri di sini secara gratis.",
   "The Founder Set is yours.": "Set pendiri kini milikmu.",
-  "Duplicate native mod id {id}.": "ID mod native duplikat {id}."
+  "Duplicate native mod id {id}.": "ID mod native duplikat {id}.",
+  "Could not open Prism's accounts file.": "Tidak dapat membuka file akun Prism.",
+  "Could not read Prism's accounts file.": "Tidak dapat membaca file akun Prism.",
+  "Prism's accounts file is too large.": "File akun Prism terlalu besar.",
+  "Could not parse Prism's accounts file.": "Tidak dapat mengurai file akun Prism.",
+  "Prism's accounts file has no accounts.": "File akun Prism tidak memiliki akun.",
+  "Select one Microsoft account in Prism Launcher first.": "Pilih satu akun Microsoft di Prism Launcher terlebih dahulu.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism tidak memiliki sesi Minecraft. Masuk ke Prism terlebih dahulu.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Buka Prism Launcher, segarkan akunnya, lalu impor sesinya lagi.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Sesi Minecraft Prism saat ini telah diimpor. Segarkan dan impor ulang dari Prism saat kedaluwarsa."
 }

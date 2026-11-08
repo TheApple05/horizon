@@ -1121,5 +1121,14 @@
   "Claim for free": "Otten di bant",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Il furnidôr di paiaments de buteghe nol servìs il to paîs, alore tu puedis otignî achì di bant l'Insiemi di fondadôrs.",
   "The Founder Set is yours.": "L'Insiemi di fondadôrs al è to.",
-  "Duplicate native mod id {id}.": "ID di mod natîf duplicât {id}."
+  "Duplicate native mod id {id}.": "ID di mod natîf duplicât {id}.",
+  "Could not open Prism's accounts file.": "Impussibil vierzi il file dai conts di Prism.",
+  "Could not read Prism's accounts file.": "Impussibil lei il file dai conts di Prism.",
+  "Prism's accounts file is too large.": "Il file dai conts di Prism al è masse grant.",
+  "Could not parse Prism's accounts file.": "Impussibil analizâ il file dai conts di Prism.",
+  "Prism's accounts file has no accounts.": "Il file dai conts di Prism nol à nissun cont.",
+  "Select one Microsoft account in Prism Launcher first.": "Sielç prime un cont Microsoft in Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism nol à nissune session Minecraft. Acuedi prime cun Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Vierç Prism Launcher, inzornis il so cont, po torne impuarte la sô session.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Session Minecraft atuâl di Prism impuartade. Inzornis e torne impuarte di Prism cuant che e scjad."
 }

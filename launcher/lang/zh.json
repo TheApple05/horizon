@@ -1121,5 +1121,14 @@
   "Claim for free": "免费领取",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "商店的支付服务商不在你所在的国家提供服务，因此你可以在这里免费领取创始者套装。",
   "The Founder Set is yours.": "创始者套装已归你所有。",
-  "Duplicate native mod id {id}.": "原生模组 ID {id} 重复。"
+  "Duplicate native mod id {id}.": "原生模组 ID {id} 重复。",
+  "Could not open Prism's accounts file.": "无法打开 Prism 的账户文件。",
+  "Could not read Prism's accounts file.": "无法读取 Prism 的账户文件。",
+  "Prism's accounts file is too large.": "Prism 的账户文件过大。",
+  "Could not parse Prism's accounts file.": "无法解析 Prism 的账户文件。",
+  "Prism's accounts file has no accounts.": "Prism 的账户文件中没有账户。",
+  "Select one Microsoft account in Prism Launcher first.": "请先在 Prism Launcher 中选择一个 Microsoft 账户。",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism 没有 Minecraft 会话。请先使用 Prism 登录。",
+  "Open Prism Launcher, refresh its account, then import its session again.": "打开 Prism Launcher，刷新其账户，然后再次导入其会话。",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "已导入 Prism 当前的 Minecraft 会话。当会话过期时，请从 Prism 刷新并重新导入。"
 }

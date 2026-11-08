@@ -1121,5 +1121,14 @@
   "Claim for free": "Kaout evit netra",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Pourchaser paeañ ar stal ne servij ket ho pro, setu e c'hallit kaout Lakaet ar grouerien amañ evit netra.",
   "The Founder Set is yours.": "Lakaet ar grouerien a zo deoc'h.",
-  "Duplicate native mod id {id}.": "ID ar mod orin {id} eilet."
+  "Duplicate native mod id {id}.": "ID ar mod orin {id} eilet.",
+  "Could not open Prism's accounts file.": "Ne c'haller ket digeriñ restr kontoù Prism.",
+  "Could not read Prism's accounts file.": "Ne c'haller ket lenn restr kontoù Prism.",
+  "Prism's accounts file is too large.": "Re vras eo restr kontoù Prism.",
+  "Could not parse Prism's accounts file.": "Ne c'haller ket dielfennañ restr kontoù Prism.",
+  "Prism's accounts file has no accounts.": "N'eus kont ebet e restr kontoù Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "Diuzit da gentañ ur c'hont Microsoft e Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "N'eus sesioun Minecraft ebet gant Prism. Kevreañ e Prism da gentañ.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Digorit Prism Launcher, freskaat e gont, ha neuze enporzhit e sesioun en-dro.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Enporzhiet eo bet sesioun Minecraft redian Prism. Freskait hag enporzhit en-dro adalek Prism pa vo aet da get."
 }

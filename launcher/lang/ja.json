@@ -1121,5 +1121,14 @@
   "Claim for free": "無料で受け取る",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ショップの決済サービスはお住まいの国に対応していないため、ファウンダーセットをここで無料で受け取れます。",
   "The Founder Set is yours.": "ファウンダーセットはあなたのものです。",
-  "Duplicate native mod id {id}.": "ネイティブmod ID {id} が重複しています。"
+  "Duplicate native mod id {id}.": "ネイティブmod ID {id} が重複しています。",
+  "Could not open Prism's accounts file.": "Prismのアカウントファイルを開けませんでした。",
+  "Could not read Prism's accounts file.": "Prismのアカウントファイルを読み取れませんでした。",
+  "Prism's accounts file is too large.": "Prismのアカウントファイルが大きすぎます。",
+  "Could not parse Prism's accounts file.": "Prismのアカウントファイルを解析できませんでした。",
+  "Prism's accounts file has no accounts.": "Prismのアカウントファイルにアカウントがありません。",
+  "Select one Microsoft account in Prism Launcher first.": "先にPrism LauncherでMicrosoftアカウントを1つ選択してください。",
+  "Prism has no Minecraft session. Sign in with Prism first.": "PrismにはMinecraftセッションがありません。先にPrismにサインインしてください。",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcherを開き、アカウントを更新してから、セッションをもう一度インポートしてください。",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prismの現在のMinecraftセッションをインポートしました。期限切れになったら、Prismで更新して再インポートしてください。"
 }

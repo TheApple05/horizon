@@ -1121,5 +1121,14 @@
   "Claim for free": "Lunasta ilmaiseksi",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Kaupan maksupalvelu ei toimi maassasi, joten voit lunastaa Perustaja-setin täältä ilmaiseksi.",
   "The Founder Set is yours.": "Perustaja-setti on sinun.",
-  "Duplicate native mod id {id}.": "Natiivin modin tunniste {id} on kaksoiskappale."
+  "Duplicate native mod id {id}.": "Natiivin modin tunniste {id} on kaksoiskappale.",
+  "Could not open Prism's accounts file.": "Prismin tilitiedostoa ei voitu avata.",
+  "Could not read Prism's accounts file.": "Prismin tilitiedostoa ei voitu lukea.",
+  "Prism's accounts file is too large.": "Prismin tilitiedosto on liian suuri.",
+  "Could not parse Prism's accounts file.": "Prismin tilitiedostoa ei voitu jäsentää.",
+  "Prism's accounts file has no accounts.": "Prismin tilitiedostossa ei ole tilejä.",
+  "Select one Microsoft account in Prism Launcher first.": "Valitse ensin yksi Microsoft-tili Prism Launcherissa.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prismillä ei ole Minecraft-istuntoa. Kirjaudu ensin sisään Prismillä.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Avaa Prism Launcher, päivitä sen tili ja tuo sen istunto uudelleen.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prismin nykyinen Minecraft-istunto tuotu. Päivitä ja tuo uudelleen Prismistä, kun se vanhenee."
 }

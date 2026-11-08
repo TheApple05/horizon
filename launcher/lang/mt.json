@@ -1121,5 +1121,14 @@
   "Claim for free": "Ħudu b'xejn",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Il-fornitur tal-ħlas tal-ħanut ma jaqdix lil pajjiżek, għalhekk tista' tieħu s-Sett tal-fundatur hawn b'xejn.",
   "The Founder Set is yours.": "Is-Sett tal-fundatur huwa tiegħek.",
-  "Duplicate native mod id {id}.": "ID tal-mod nattiv duplikat {id}."
+  "Duplicate native mod id {id}.": "ID tal-mod nattiv duplikat {id}.",
+  "Could not open Prism's accounts file.": "Ma setgħetx tinfetaħ il-fajl tal-kontijiet ta' Prism.",
+  "Could not read Prism's accounts file.": "Ma setgħetx tinqara l-fajl tal-kontijiet ta' Prism.",
+  "Prism's accounts file is too large.": "Il-fajl tal-kontijiet ta' Prism huwa kbir wisq.",
+  "Could not parse Prism's accounts file.": "Ma setgħetx tiġi analizzata l-fajl tal-kontijiet ta' Prism.",
+  "Prism's accounts file has no accounts.": "Il-fajl tal-kontijiet ta' Prism m'għandux kontijiet.",
+  "Select one Microsoft account in Prism Launcher first.": "L-ewwel agħżel kont Microsoft wieħed f'Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism m'għandux sessjoni Minecraft. L-ewwel idħol b'Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Iftaħ Prism Launcher, aġġorna l-kont tiegħu, imbagħad erġa' importa s-sessjoni tiegħu.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Ġiet importata s-sessjoni Minecraft attwali ta' Prism. Aġġorna u erġa' importa minn Prism meta tiskadi."
 }

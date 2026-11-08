@@ -1121,5 +1121,14 @@
   "Claim for free": "Bepul olish",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Do‘konning to‘lov xizmati sizning mamlakatingizda ishlamaydi, shuning uchun Ta'sischilar to'plamini bu yerda bepul olishingiz mumkin.",
   "The Founder Set is yours.": "Ta'sischilar to'plami endi sizniki.",
-  "Duplicate native mod id {id}.": "Mahalliy mod identifikatori {id} takrorlangan."
+  "Duplicate native mod id {id}.": "Mahalliy mod identifikatori {id} takrorlangan.",
+  "Could not open Prism's accounts file.": "Prism hisoblar faylini ochib bo‘lmadi.",
+  "Could not read Prism's accounts file.": "Prism hisoblar faylini o‘qib bo‘lmadi.",
+  "Prism's accounts file is too large.": "Prism hisoblar fayli juda katta.",
+  "Could not parse Prism's accounts file.": "Prism hisoblar faylini tahlil qilib bo‘lmadi.",
+  "Prism's accounts file has no accounts.": "Prism hisoblar faylida hisoblar yo‘q.",
+  "Select one Microsoft account in Prism Launcher first.": "Avval Prism Launcher’da bitta Microsoft hisobini tanlang.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism’da Minecraft sessiyasi yo‘q. Avval Prism orqali tizimga kiring.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher’ni oching, uning hisobini yangilang, so‘ngra sessiyasini qayta import qiling.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism’ning joriy Minecraft sessiyasi import qilindi. U tugagach, Prism’dan yangilab, qayta import qiling."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "Obter de balde",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "O provedor de pagos da tenda non opera no teu país, así que podes obter o Set fundador aquí de balde.",
   "The Founder Set is yours.": "O Set fundador é teu.",
-  "Duplicate native mod id {id}.": "ID de mod nativo duplicado {id}."
+  "Duplicate native mod id {id}.": "ID de mod nativo duplicado {id}.",
+  "Could not open Prism's accounts file.": "Non se puido abrir o ficheiro de contas de Prism.",
+  "Could not read Prism's accounts file.": "Non se puido ler o ficheiro de contas de Prism.",
+  "Prism's accounts file is too large.": "O ficheiro de contas de Prism é demasiado grande.",
+  "Could not parse Prism's accounts file.": "Non se puido analizar o ficheiro de contas de Prism.",
+  "Prism's accounts file has no accounts.": "O ficheiro de contas de Prism non ten contas.",
+  "Select one Microsoft account in Prism Launcher first.": "Selecciona primeiro unha conta de Microsoft en Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism non ten ningunha sesión de Minecraft. Inicia sesión con Prism primeiro.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Abre Prism Launcher, actualiza a súa conta e despois importa de novo a súa sesión.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Importouse a sesión actual de Minecraft de Prism. Actualiza e volve importar desde Prism cando caduque."
 }

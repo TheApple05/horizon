@@ -1121,5 +1121,14 @@
   "Claim for free": "קבלו בחינם",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ספק התשלומים של החנות אינו פועל במדינה שלכם, לכן אפשר לקבל כאן את סט המייסד בחינם.",
   "The Founder Set is yours.": "סט המייסד שלכם.",
-  "Duplicate native mod id {id}.": "מזהה מוד מקורי כפול {id}."
+  "Duplicate native mod id {id}.": "מזהה מוד מקורי כפול {id}.",
+  "Could not open Prism's accounts file.": "לא ניתן לפתוח את קובץ החשבונות של Prism.",
+  "Could not read Prism's accounts file.": "לא ניתן לקרוא את קובץ החשבונות של Prism.",
+  "Prism's accounts file is too large.": "קובץ החשבונות של Prism גדול מדי.",
+  "Could not parse Prism's accounts file.": "לא ניתן לנתח את קובץ החשבונות של Prism.",
+  "Prism's accounts file has no accounts.": "אין חשבונות בקובץ החשבונות של Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "יש לבחור חשבון Microsoft אחד ב-Prism Launcher תחילה.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "אין ל-Prism הפעלת Minecraft. יש להתחבר ל-Prism תחילה.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "פתחו את Prism Launcher, רעננו את החשבון, ואז ייבאו שוב את ההפעלה.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "הפעלת ה-Minecraft הנוכחית של Prism יובאה. רעננו וייבאו מחדש מ-Prism כשתפוג."
 }

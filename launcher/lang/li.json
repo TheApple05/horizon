@@ -1121,5 +1121,14 @@
   "Claim for free": "Gratis kriege",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "De betaalprovider van de winkel bedient dien land neet, dus kins se de Oprichter set hie gratis kriege.",
   "The Founder Set is yours.": "De Oprichter set is van dich.",
-  "Duplicate native mod id {id}.": "Dubbele native mod-ID {id}."
+  "Duplicate native mod id {id}.": "Dubbele native mod-ID {id}.",
+  "Could not open Prism's accounts file.": "'t Kontebestandj van Prism kós neet äöpene.",
+  "Could not read Prism's accounts file.": "'t Kontebestandj van Prism kós neet laeze.",
+  "Prism's accounts file is too large.": "'t Kontebestandj van Prism is te groeat.",
+  "Could not parse Prism's accounts file.": "'t Kontebestandj van Prism kós neet verwerk waere.",
+  "Prism's accounts file has no accounts.": "In 't Kontebestandj van Prism zeen gein konten.",
+  "Select one Microsoft account in Prism Launcher first.": "Kees iers ein Microsoft-konto in Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism haet gein Minecraft-sessie. Log iers in mit Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Aopen Prism Launcher, verfris 't konto en importeer de sessie daonao obberns.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "De hudige Minecraft-sessie van Prism is geïmporteerd. Verfris en importeer obberns vanoet Prism es 't verlop."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "Ücretsiz al",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Mağazanın ödeme sağlayıcısı ülkende hizmet vermiyor, bu yüzden Kurucu setini burada ücretsiz alabilirsin.",
   "The Founder Set is yours.": "Kurucu seti artık senin.",
-  "Duplicate native mod id {id}.": "Yinelenen yerel mod kimliği {id}."
+  "Duplicate native mod id {id}.": "Yinelenen yerel mod kimliği {id}.",
+  "Could not open Prism's accounts file.": "Prism hesaplar dosyası açılamadı.",
+  "Could not read Prism's accounts file.": "Prism hesaplar dosyası okunamadı.",
+  "Prism's accounts file is too large.": "Prism hesaplar dosyası çok büyük.",
+  "Could not parse Prism's accounts file.": "Prism hesaplar dosyası ayrıştırılamadı.",
+  "Prism's accounts file has no accounts.": "Prism hesaplar dosyasında hesap yok.",
+  "Select one Microsoft account in Prism Launcher first.": "Önce Prism Launcher'da bir Microsoft hesabı seçin.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism'de Minecraft oturumu yok. Önce Prism ile oturum açın.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher'ı açın, hesabını yenileyin, ardından oturumunu tekrar içe aktarın.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism'in mevcut Minecraft oturumu içe aktarıldı. Süresi dolduğunda Prism'den yenileyip tekrar içe aktarın."
 }

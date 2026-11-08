@@ -1121,5 +1121,14 @@
   "Claim for free": "באַקום אומזיסט",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "דער צאָלונג־סערוויס פֿון דעם קראָם אַרבעט נישט אין דײַן לאַנד, דערפֿאַר קענסטו דאָ באַקומען דעם גרינדער שטעלן אומזיסט.",
   "The Founder Set is yours.": "דער גרינדער שטעלן איז דײַנער.",
-  "Duplicate native mod id {id}.": "דופּליקאַט נאַטיווער מאָד אידענטיפֿיקאַטאָר {id}."
+  "Duplicate native mod id {id}.": "דופּליקאַט נאַטיווער מאָד אידענטיפֿיקאַטאָר {id}.",
+  "Could not open Prism's accounts file.": "מ'האט נישט געקענט עפענען די קאנטע-טעקע פון Prism.",
+  "Could not read Prism's accounts file.": "מ'האט נישט געקענט לייענען די קאנטע-טעקע פון Prism.",
+  "Prism's accounts file is too large.": "די קאנטע-טעקע פון Prism איז צו גרויס.",
+  "Could not parse Prism's accounts file.": "מ'האט נישט געקענט פארשטיין די קאנטע-טעקע פון Prism.",
+  "Prism's accounts file has no accounts.": "די קאנטע-טעקע פון Prism האט נישט קיין קאנטעס.",
+  "Select one Microsoft account in Prism Launcher first.": "קלויבט אויס ערשט איין Microsoft קאנטע אין Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism האט נישט קיין Minecraft סעסיע. לאגירט זיך איין מיט Prism ערשט.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "עפֿנט Prism Launcher, דערפרישט זיין קאנטע, און אימפארטירט זיין סעסיע נאכאמאל.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "אימפארטירט Prism'ס אקטועלע Minecraft סעסיע. דערפרישט און אימפארטירט נאכאמאל פון Prism ווען זי לויפט אויס."
 }

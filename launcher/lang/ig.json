@@ -1121,5 +1121,14 @@
   "Claim for free": "Nara ya n'efu",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Onye na-enye ịkwụ ụgwọ nke ụlọ ahịa anaghị arụ ọrụ na mba gị, ya mere ị nwere ike ịnara Ntọala ntọala ebe a n'efu.",
   "The Founder Set is yours.": "Ntọala ntọala bụ nke gị.",
-  "Duplicate native mod id {id}.": "Ntụgharị ID mod mbụ {id}."
+  "Duplicate native mod id {id}.": "Ntụgharị ID mod mbụ {id}.",
+  "Could not open Prism's accounts file.": "Enweghị ike imeghe faịlụ akaụntụ Prism.",
+  "Could not read Prism's accounts file.": "Enweghị ike ịgụ faịlụ akaụntụ Prism.",
+  "Prism's accounts file is too large.": "Faịlụ akaụntụ Prism buru oke ibu.",
+  "Could not parse Prism's accounts file.": "Enweghị ike nyochaa faịlụ akaụntụ Prism.",
+  "Prism's accounts file has no accounts.": "Faịlụ akaụntụ Prism enweghị akaụntụ ọ bụla.",
+  "Select one Microsoft account in Prism Launcher first.": "Họrọ otu akaụntụ Microsoft na Prism Launcher mbụ.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism enweghị nnọkọ Minecraft. Banye na Prism mbụ.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Mepee Prism Launcher, mee ka akaụntụ ya dị ọhụrụ, wee bubata nnọkọ ya ọzọ.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Ebubatala nnọkọ Minecraft Prism dị ugbu a. Mee ka ọ dị ọhụrụ ma bubata ya ọzọ site na Prism mgbe ọ kubiri."
 }

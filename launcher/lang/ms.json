@@ -1121,5 +1121,14 @@
   "Claim for free": "Tuntut percuma",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Penyedia pembayaran kedai tidak berkhidmat di negara anda, jadi anda boleh menuntut Set pengasas di sini secara percuma.",
   "The Founder Set is yours.": "Set pengasas kini milik anda.",
-  "Duplicate native mod id {id}.": "ID mod asli pendua {id}."
+  "Duplicate native mod id {id}.": "ID mod asli pendua {id}.",
+  "Could not open Prism's accounts file.": "Tidak dapat membuka fail akaun Prism.",
+  "Could not read Prism's accounts file.": "Tidak dapat membaca fail akaun Prism.",
+  "Prism's accounts file is too large.": "Fail akaun Prism terlalu besar.",
+  "Could not parse Prism's accounts file.": "Tidak dapat menghuraikan fail akaun Prism.",
+  "Prism's accounts file has no accounts.": "Fail akaun Prism tiada akaun.",
+  "Select one Microsoft account in Prism Launcher first.": "Pilih satu akaun Microsoft dalam Prism Launcher dahulu.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism tiada sesi Minecraft. Log masuk dengan Prism dahulu.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Buka Prism Launcher, muat semula akaunnya, kemudian import semula sesinya.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Sesi Minecraft semasa Prism telah diimport. Muat semula dan import semula daripada Prism apabila ia tamat tempoh."
 }

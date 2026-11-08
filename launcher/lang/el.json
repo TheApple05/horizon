@@ -1121,5 +1121,14 @@
   "Claim for free": "Απόκτησέ το δωρεάν",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Ο πάροχος πληρωμών του καταστήματος δεν εξυπηρετεί τη χώρα σου, οπότε μπορείς να αποκτήσεις το Ιδρυτικό σύνολο εδώ δωρεάν.",
   "The Founder Set is yours.": "Το Ιδρυτικό σύνολο είναι δικό σου.",
-  "Duplicate native mod id {id}.": "Διπλό αναγνωριστικό εγγενούς mod {id}."
+  "Duplicate native mod id {id}.": "Διπλό αναγνωριστικό εγγενούς mod {id}.",
+  "Could not open Prism's accounts file.": "Δεν ήταν δυνατό το άνοιγμα του αρχείου λογαριασμών του Prism.",
+  "Could not read Prism's accounts file.": "Δεν ήταν δυνατή η ανάγνωση του αρχείου λογαριασμών του Prism.",
+  "Prism's accounts file is too large.": "Το αρχείο λογαριασμών του Prism είναι πολύ μεγάλο.",
+  "Could not parse Prism's accounts file.": "Δεν ήταν δυνατή η ανάλυση του αρχείου λογαριασμών του Prism.",
+  "Prism's accounts file has no accounts.": "Το αρχείο λογαριασμών του Prism δεν περιέχει λογαριασμούς.",
+  "Select one Microsoft account in Prism Launcher first.": "Επιλέξτε πρώτα έναν λογαριασμό Microsoft στο Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Το Prism δεν έχει συνεδρία Minecraft. Συνδεθείτε πρώτα με το Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Ανοίξτε το Prism Launcher, ανανεώστε τον λογαριασμό του και έπειτα εισαγάγετε ξανά τη συνεδρία του.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Η τρέχουσα συνεδρία Minecraft του Prism εισήχθη. Ανανεώστε και εισαγάγετε ξανά από το Prism όταν λήξει."
 }

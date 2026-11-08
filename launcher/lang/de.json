@@ -1121,5 +1121,14 @@
   "Claim for free": "Kostenlos holen",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Der Zahlungsanbieter des Shops ist in deinem Land nicht verfügbar, daher kannst du das Gründer-Set hier kostenlos holen.",
   "The Founder Set is yours.": "Das Gründer-Set gehört dir.",
-  "Duplicate native mod id {id}.": "Doppelte native Mod-ID {id}."
+  "Duplicate native mod id {id}.": "Doppelte native Mod-ID {id}.",
+  "Could not open Prism's accounts file.": "Prisms Kontodatei konnte nicht geöffnet werden.",
+  "Could not read Prism's accounts file.": "Prisms Kontodatei konnte nicht gelesen werden.",
+  "Prism's accounts file is too large.": "Prisms Kontodatei ist zu groß.",
+  "Could not parse Prism's accounts file.": "Prisms Kontodatei konnte nicht verarbeitet werden.",
+  "Prism's accounts file has no accounts.": "Prisms Kontodatei enthält keine Konten.",
+  "Select one Microsoft account in Prism Launcher first.": "Wähle zuerst ein Microsoft-Konto in Prism Launcher aus.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism hat keine Minecraft-Sitzung. Melde dich zuerst bei Prism an.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Öffne Prism Launcher, aktualisiere das Konto und importiere die Sitzung dann erneut.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prisms aktuelle Minecraft-Sitzung wurde importiert. Aktualisiere und importiere sie erneut aus Prism, wenn sie abläuft."
 }

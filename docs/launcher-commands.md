@@ -138,6 +138,16 @@ Show the Discord, sponsor and website links.
 
 MCP: `links`.
 
+## `horizon-launcher account import-prism`
+
+Import the active Prism account's current Minecraft session (refresh remains in Prism).
+
+    horizon-launcher account import-prism <ACCOUNTS_FILE>
+
+- `ACCOUNTS_FILE`
+
+MCP: `account_import_prism`.
+
 ## `horizon-launcher account list`
 
 The signed-in accounts and which one plays.

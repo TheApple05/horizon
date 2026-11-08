@@ -12,6 +12,7 @@
 //!
 //! The Azure app (client ID) is Horizon's own and is configuration: `HORIZON_MSA_CLIENT_ID` at
 //! build time, or at run time to override it. Without one, sign-in says it is not configured.
+pub mod prism;
 pub mod session;
 
 use serde_json::{json, Value};
@@ -556,7 +557,18 @@ fn check_with(
     if secrets.sign_in_required {
         return Check::NoAnswer(SIGN_IN_AGAIN.into(), secrets);
     }
-    if force || secrets.minecraft_expires_at <= now() + RENEW_BEFORE {
+    if secrets.refresh_token.is_empty() && secrets.minecraft_expires_at <= now() + RENEW_BEFORE {
+        return Check::NoAnswer(
+            crate::i18n::tr(
+                "Open Prism Launcher, refresh its account, then import its session again.",
+            )
+            .into(),
+            secrets,
+        );
+    }
+    if (force && !secrets.refresh_token.is_empty())
+        || secrets.minecraft_expires_at <= now() + RENEW_BEFORE
+    {
         progress(session::Phase::Microsoft);
         let renewed = client_id
             .ok_or_else(|| NOT_CONFIGURED.to_string())

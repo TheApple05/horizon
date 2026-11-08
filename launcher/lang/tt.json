@@ -1121,5 +1121,14 @@
   "Claim for free": "Бушлай алу",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Кибетнең түләү хезмәте сезнең илдә эшләми, шуңа күрә Нигез салучы җыелмасын монда бушлай ала аласыз.",
   "The Founder Set is yours.": "Нигез салучы җыелмасы — сезнеке.",
-  "Duplicate native mod id {id}.": "Туган мод идентификаторы {id} кабатлана."
+  "Duplicate native mod id {id}.": "Туган мод идентификаторы {id} кабатлана.",
+  "Could not open Prism's accounts file.": "Prism аккаунтлар файлын ачу мөмкин түгел.",
+  "Could not read Prism's accounts file.": "Prism аккаунтлар файлын уку мөмкин түгел.",
+  "Prism's accounts file is too large.": "Prism аккаунтлар файлы бик зур.",
+  "Could not parse Prism's accounts file.": "Prism аккаунтлар файлын анализлау мөмкин түгел.",
+  "Prism's accounts file has no accounts.": "Prism аккаунтлар файлында аккаунтлар юк.",
+  "Select one Microsoft account in Prism Launcher first.": "Башта Prism Launcher'да бер Microsoft аккаунтын сайлагыз.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism'да Minecraft сессиясе юк. Башта Prism аша керегез.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Prism Launcher'ны ачыгыз, аның аккаунтын яңартыгыз, аннары аның сессиясен яңадан импортлагыз.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism'ның агымдагы Minecraft сессиясе импортланды. Ул беткәч, Prism'дан яңартып, яңадан импортлагыз."
 }

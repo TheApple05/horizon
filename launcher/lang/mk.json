@@ -1121,5 +1121,14 @@
   "Claim for free": "Земи бесплатно",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Давателот на плаќања на продавницата не работи во вашата земја, па Основачкиот сет можете да го земете тука бесплатно.",
   "The Founder Set is yours.": "Основачкиот сет е ваш.",
-  "Duplicate native mod id {id}.": "Дупликат ID на нативен мод {id}."
+  "Duplicate native mod id {id}.": "Дупликат ID на нативен мод {id}.",
+  "Could not open Prism's accounts file.": "Не можев да се отвори датотеката со сметки на Prism.",
+  "Could not read Prism's accounts file.": "Не можев да се прочита датотеката со сметки на Prism.",
+  "Prism's accounts file is too large.": "Датотеката со сметки на Prism е премногу голема.",
+  "Could not parse Prism's accounts file.": "Не можев да се анализира датотеката со сметки на Prism.",
+  "Prism's accounts file has no accounts.": "Датотеката со сметки на Prism нема сметки.",
+  "Select one Microsoft account in Prism Launcher first.": "Прво изберете една Microsoft сметка во Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism нема Minecraft сесија. Прво најавете се со Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Отворете Prism Launcher, освежете ја неговата сметка, потоа повторно увезете ја неговата сесија.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Увезена е тековната Minecraft сесија на Prism. Кога ќе истече, освежете и повторно увезете од Prism."
 }

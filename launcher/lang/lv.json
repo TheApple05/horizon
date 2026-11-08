@@ -1121,5 +1121,14 @@
   "Claim for free": "Saņemt bez maksas",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Veikala maksājumu pakalpojums jūsu valstī nedarbojas, tāpēc Dibinātāja komplektu šeit varat saņemt bez maksas.",
   "The Founder Set is yours.": "Dibinātāja komplekts ir jūsu.",
-  "Duplicate native mod id {id}.": "Dublēts vietējā mod ID {id}."
+  "Duplicate native mod id {id}.": "Dublēts vietējā mod ID {id}.",
+  "Could not open Prism's accounts file.": "Nevarēja atvērt Prism kontu failu.",
+  "Could not read Prism's accounts file.": "Nevarēja nolasīt Prism kontu failu.",
+  "Prism's accounts file is too large.": "Prism kontu fails ir pārāk liels.",
+  "Could not parse Prism's accounts file.": "Nevarēja parsēt Prism kontu failu.",
+  "Prism's accounts file has no accounts.": "Prism kontu failā nav kontu.",
+  "Select one Microsoft account in Prism Launcher first.": "Vispirms Prism Launcher atlasiet vienu Microsoft kontu.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism nav Minecraft sesijas. Vispirms piesakieties ar Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Atveriet Prism Launcher, atsvaidziniet tā kontu un pēc tam vēlreiz importējiet tā sesiju.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Importēta Prism pašreizējā Minecraft sesija. Kad tā beigsies, atsvaidziniet un importējiet no Prism vēlreiz."
 }

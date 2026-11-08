@@ -1121,5 +1121,14 @@
   "Claim for free": "Faigh an-asgaidh",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Chan eil solaraiche pàighidh a' bhùtha a' frithealadh na dùthcha agad, mar sin gheibh thu an Seata stèidheadair an-seo an-asgaidh.",
   "The Founder Set is yours.": "'S ann leatsa a tha an Seata stèidheadair.",
-  "Duplicate native mod id {id}.": "ID mod dùthchasach dùblaichte {id}."
+  "Duplicate native mod id {id}.": "ID mod dùthchasach dùblaichte {id}.",
+  "Could not open Prism's accounts file.": "Cha b' urrainn dhuinn faidhle chunntasan Prism fhosgladh.",
+  "Could not read Prism's accounts file.": "Cha b' urrainn dhuinn faidhle chunntasan Prism a leughadh.",
+  "Prism's accounts file is too large.": "Tha faidhle chunntasan Prism ro mhòr.",
+  "Could not parse Prism's accounts file.": "Cha b' urrainn dhuinn faidhle chunntasan Prism a pharsadh.",
+  "Prism's accounts file has no accounts.": "Chan eil cunntasan sam bith ann am faidhle chunntasan Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "Tagh aon chunntas Microsoft ann am Prism Launcher an toiseach.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Chan eil seisean Minecraft aig Prism. Clàraich a-steach le Prism an toiseach.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Fosgail Prism Launcher, ùraich an cunntas aige, agus an uair sin ion-phortaich an seisean aige a-rithist.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Chaidh seisean Minecraft làithreach Prism ion-phortadh. Ùraich agus ion-phortaich a-rithist bho Prism nuair a thig e gu crìch."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "Lortu doan",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Dendaren ordainketa-hornitzaileak ez du zure herrialdean zerbitzurik ematen, beraz Sortzaile multzoa hemen doan lor dezakezu.",
   "The Founder Set is yours.": "Sortzaile multzoa zurea da.",
-  "Duplicate native mod id {id}.": "Modu natiboaren ID bikoiztua {id}."
+  "Duplicate native mod id {id}.": "Modu natiboaren ID bikoiztua {id}.",
+  "Could not open Prism's accounts file.": "Ezin izan da Prism-en kontu-fitxategia ireki.",
+  "Could not read Prism's accounts file.": "Ezin izan da Prism-en kontu-fitxategia irakurri.",
+  "Prism's accounts file is too large.": "Prism-en kontu-fitxategia handiegia da.",
+  "Could not parse Prism's accounts file.": "Ezin izan da Prism-en kontu-fitxategia analizatu.",
+  "Prism's accounts file has no accounts.": "Prism-en kontu-fitxategiak ez du konturik.",
+  "Select one Microsoft account in Prism Launcher first.": "Hautatu lehenengo Microsoft kontu bat Prism Launcher-en.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism-ek ez du Minecraft saiorik. Hasi saioa Prism-ekin lehenengo.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Ireki Prism Launcher, freskatu bere kontua, eta gero inportatu berriro bere saioa.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Prism-en uneko Minecraft saioa inportatu da. Freskatu eta inportatu berriro Prism-etik iraungitzen denean."
 }

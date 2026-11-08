@@ -1121,5 +1121,14 @@
   "Claim for free": "Aconsegueix-lo gratis",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "El proveïdor de pagaments de la botiga no dona servei al teu país, així que pots aconseguir el Conjunt del fundador aquí gratis.",
   "The Founder Set is yours.": "El Conjunt del fundador és teu.",
-  "Duplicate native mod id {id}.": "ID de mod natiu duplicat {id}."
+  "Duplicate native mod id {id}.": "ID de mod natiu duplicat {id}.",
+  "Could not open Prism's accounts file.": "No s'ha pogut obrir el fitxer de comptes de Prism.",
+  "Could not read Prism's accounts file.": "No s'ha pogut llegir el fitxer de comptes de Prism.",
+  "Prism's accounts file is too large.": "El fitxer de comptes de Prism és massa gran.",
+  "Could not parse Prism's accounts file.": "No s'ha pogut analitzar el fitxer de comptes de Prism.",
+  "Prism's accounts file has no accounts.": "El fitxer de comptes de Prism no té comptes.",
+  "Select one Microsoft account in Prism Launcher first.": "Primer seleccioneu un compte de Microsoft a Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism no té cap sessió de Minecraft. Inicieu la sessió a Prism primer.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Obriu Prism Launcher, actualitzeu-ne el compte i torneu a importar-ne la sessió.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "S'ha importat la sessió de Minecraft actual de Prism. Actualitzeu-la i torneu-la a importar des de Prism quan caduqui."
 }

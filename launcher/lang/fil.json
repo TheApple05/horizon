@@ -1121,5 +1121,14 @@
   "Claim for free": "Kunin nang libre",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Hindi nagseserbisyo sa bansa mo ang payment provider ng shop, kaya puwede mong kunin dito nang libre ang Set ng founder.",
   "The Founder Set is yours.": "Sa iyo na ang Set ng founder.",
-  "Duplicate native mod id {id}.": "Doble ang native na mod ID {id}."
+  "Duplicate native mod id {id}.": "Doble ang native na mod ID {id}.",
+  "Could not open Prism's accounts file.": "Hindi mabuksan ang accounts file ng Prism.",
+  "Could not read Prism's accounts file.": "Hindi mabasa ang accounts file ng Prism.",
+  "Prism's accounts file is too large.": "Masyado malaki ang accounts file ng Prism.",
+  "Could not parse Prism's accounts file.": "Hindi ma-parse ang accounts file ng Prism.",
+  "Prism's accounts file has no accounts.": "Walang account sa accounts file ng Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "Pumili muna ng isang Microsoft account sa Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Walang Minecraft session ang Prism. Mag-sign in muna gamit ang Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Buksan ang Prism Launcher, i-refresh ang account nito, pagkatapos i-import muli ang session nito.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Na-import ang kasalukuyang Minecraft session ng Prism. I-refresh at i-import muli mula sa Prism kapag nag-expire ito."
 }

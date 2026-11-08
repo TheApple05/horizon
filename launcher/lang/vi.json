@@ -1121,5 +1121,14 @@
   "Claim for free": "Nhận miễn phí",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Nhà cung cấp thanh toán của cửa hàng không phục vụ quốc gia của bạn, nên bạn có thể nhận Bộ sáng lập tại đây miễn phí.",
   "The Founder Set is yours.": "Bộ sáng lập giờ là của bạn.",
-  "Duplicate native mod id {id}.": "ID mod gốc {id} bị trùng lặp."
+  "Duplicate native mod id {id}.": "ID mod gốc {id} bị trùng lặp.",
+  "Could not open Prism's accounts file.": "Không thể mở tệp tài khoản của Prism.",
+  "Could not read Prism's accounts file.": "Không thể đọc tệp tài khoản của Prism.",
+  "Prism's accounts file is too large.": "Tệp tài khoản của Prism quá lớn.",
+  "Could not parse Prism's accounts file.": "Không thể phân tích tệp tài khoản của Prism.",
+  "Prism's accounts file has no accounts.": "Tệp tài khoản của Prism không có tài khoản nào.",
+  "Select one Microsoft account in Prism Launcher first.": "Hãy chọn một tài khoản Microsoft trong Prism Launcher trước.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism không có phiên Minecraft nào. Hãy đăng nhập bằng Prism trước.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Mở Prism Launcher, làm mới tài khoản của nó, rồi nhập lại phiên của nó.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Đã nhập phiên Minecraft hiện tại của Prism. Hãy làm mới và nhập lại từ Prism khi phiên hết hạn."
 }

@@ -1121,5 +1121,14 @@
   "Claim for free": "Hawlio am ddim",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Nid yw darparwr talu'r siop yn gwasanaethu eich gwlad, felly gallwch hawlio'r Set sylfaenydd yma am ddim.",
   "The Founder Set is yours.": "Mae'r Set sylfaenydd yn eiddo i chi.",
-  "Duplicate native mod id {id}.": "ID mod brodorol dyblyg {id}."
+  "Duplicate native mod id {id}.": "ID mod brodorol dyblyg {id}.",
+  "Could not open Prism's accounts file.": "Methu agor ffeil cyfrifon Prism.",
+  "Could not read Prism's accounts file.": "Methu darllen ffeil cyfrifon Prism.",
+  "Prism's accounts file is too large.": "Mae ffeil cyfrifon Prism yn rhy fawr.",
+  "Could not parse Prism's accounts file.": "Methu dosrannu ffeil cyfrifon Prism.",
+  "Prism's accounts file has no accounts.": "Nid oes unrhyw gyfrifon yn ffeil cyfrifon Prism.",
+  "Select one Microsoft account in Prism Launcher first.": "Dewiswch un cyfrif Microsoft yn Prism Launcher yn gyntaf.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Nid oes gan Prism sesiwn Minecraft. Mewngofnodwch gyda Prism yn gyntaf.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Agorwch Prism Launcher, adnewyddwch ei gyfrif, yna mewngludwch ei sesiwn eto.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Mewngludwyd sesiwn Minecraft cyfredol Prism. Adnewyddwch ac ailfewngludwch o Prism pan fydd yn dod i ben."
 }

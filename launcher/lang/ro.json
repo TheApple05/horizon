@@ -1121,5 +1121,14 @@
   "Claim for free": "Revendică gratuit",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "Furnizorul de plăți al magazinului nu operează în țara ta, așa că poți revendica aici gratuit Setul fondator.",
   "The Founder Set is yours.": "Setul fondator este al tău.",
-  "Duplicate native mod id {id}.": "ID de mod nativ duplicat {id}."
+  "Duplicate native mod id {id}.": "ID de mod nativ duplicat {id}.",
+  "Could not open Prism's accounts file.": "Nu s-a putut deschide fișierul de conturi al Prism.",
+  "Could not read Prism's accounts file.": "Nu s-a putut citi fișierul de conturi al Prism.",
+  "Prism's accounts file is too large.": "Fișierul de conturi al Prism este prea mare.",
+  "Could not parse Prism's accounts file.": "Nu s-a putut analiza fișierul de conturi al Prism.",
+  "Prism's accounts file has no accounts.": "Fișierul de conturi al Prism nu conține conturi.",
+  "Select one Microsoft account in Prism Launcher first.": "Selectați mai întâi un cont Microsoft în Prism Launcher.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism nu are o sesiune Minecraft. Conectați-vă mai întâi cu Prism.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "Deschideți Prism Launcher, reîmprospătați contul acestuia, apoi importați din nou sesiunea.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "Sesiunea Minecraft curentă a Prism a fost importată. Reîmprospătați și reimportați din Prism când expiră."
 }

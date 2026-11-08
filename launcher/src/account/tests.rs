@@ -2324,3 +2324,52 @@ fn joining_a_service_id_tells_mojangs_session_server() {
     );
     assert!(refused.unwrap_err().contains("Sign in again"));
 }
+
+fn prism_fixture() -> Value {
+    json!({"accounts":[{"active":true,"type":"MSA","profile":{"id":UUID},
+            "ygg":{"token":"mc-token","exp":now()+86400},"msa":{"refresh_token":"never-import-this"}}]})
+}
+
+#[test]
+fn verifies_ownership_and_profile_without_microsoft_refresh() {
+    let (requests, ep) = mock(|_| {});
+    let (account, secrets) =
+        prism::import_bytes(&ep, prism_fixture().to_string().as_bytes()).unwrap();
+    assert_eq!(account.uuid, UUID);
+    assert_eq!(secrets.minecraft_token, "mc-token");
+    assert!(secrets.refresh_token.is_empty());
+    assert_eq!(requests.lock().unwrap().log.len(), 2);
+    assert!(matches!(
+        check(&ep, None, &account, secrets.clone()),
+        Check::Owns(..)
+    ));
+    assert!(matches!(
+        check_with(&ep, None, &account, secrets.clone(), true, &|_| {}),
+        Check::Owns(..)
+    ));
+    let expired = Secrets {
+        minecraft_expires_at: 0,
+        ..secrets
+    };
+    assert!(
+        matches!(check(&ep, None, &account, expired), Check::NoAnswer(message, _) if message.contains("Prism"))
+    );
+}
+
+#[test]
+fn rejects_expired_ambiguous_unowned_and_mismatched_sessions() {
+    let (requests, ep) = mock(|_| {});
+    let mut value = prism_fixture();
+    value["accounts"][0]["ygg"]["exp"] = json!(0);
+    assert!(prism::import_bytes(&ep, value.to_string().as_bytes()).is_err());
+    value = prism_fixture();
+    let duplicate = value["accounts"][0].clone();
+    value["accounts"].as_array_mut().unwrap().push(duplicate);
+    assert!(prism::import_bytes(&ep, value.to_string().as_bytes()).is_err());
+    assert!(requests.lock().unwrap().log.is_empty());
+    let (_, unowned) = mock(|m| m.owns_game = false);
+    assert!(prism::import_bytes(&unowned, prism_fixture().to_string().as_bytes()).is_err());
+    value = prism_fixture();
+    value["accounts"][0]["profile"]["id"] = json!("wrong-profile");
+    assert!(prism::import_bytes(&ep, value.to_string().as_bytes()).is_err());
+}

@@ -1121,5 +1121,14 @@
   "Claim for free": "ຮັບຟຣີ",
   "The shop's payment provider doesn't serve your country, so you can claim the Founder Set here for free.": "ຜູ້ໃຫ້ບໍລິການຊຳລະເງິນຂອງຮ້ານບໍ່ໃຫ້ບໍລິການໃນປະເທດຂອງທ່ານ, ສະນັ້ນທ່ານສາມາດຮັບຊຸດຜູ້ກໍ່ຕັ້ງໄດ້ທີ່ນີ້ຟຣີ.",
   "The Founder Set is yours.": "ຊຸດຜູ້ກໍ່ຕັ້ງເປັນຂອງທ່ານແລ້ວ.",
-  "Duplicate native mod id {id}.": "ID ຂອງໂມດພື້ນເມືອງ {id} ຊ້ຳກັນ."
+  "Duplicate native mod id {id}.": "ID ຂອງໂມດພື້ນເມືອງ {id} ຊ້ຳກັນ.",
+  "Could not open Prism's accounts file.": "ບໍ່ສາມາດເປີດໄຟລ໌ບັນຊີຂອງ Prism ໄດ້.",
+  "Could not read Prism's accounts file.": "ບໍ່ສາມາດອ່ານໄຟລ໌ບັນຊີຂອງ Prism ໄດ້.",
+  "Prism's accounts file is too large.": "ໄຟລ໌ບັນຊີຂອງ Prism ມີຂະໜາດໃຫຍ່ເກີນໄປ.",
+  "Could not parse Prism's accounts file.": "ບໍ່ສາມາດແປຄວາມໝາຍໄຟລ໌ບັນຊີຂອງ Prism ໄດ້.",
+  "Prism's accounts file has no accounts.": "ໄຟລ໌ບັນຊີຂອງ Prism ບໍ່ມີບັນຊີໃດໆ.",
+  "Select one Microsoft account in Prism Launcher first.": "ກະລຸນາເລືອກບັນຊີ Microsoft ໜຶ່ງບັນຊີໃນ Prism Launcher ກ່ອນ.",
+  "Prism has no Minecraft session. Sign in with Prism first.": "Prism ບໍ່ມີເຊສຊັນ Minecraft. ກະລຸນາເຂົ້າສູ່ລະບົບດ້ວຍ Prism ກ່ອນ.",
+  "Open Prism Launcher, refresh its account, then import its session again.": "ເປີດ Prism Launcher, ໂຫຼດບັນຊີຂອງມັນຄືນໃໝ່, ແລ້ວນຳເຂົ້າເຊສຊັນຂອງມັນອີກຄັ້ງ.",
+  "Imported Prism's current Minecraft session. Refresh and reimport from Prism when it expires.": "ນຳເຂົ້າເຊສຊັນ Minecraft ປັດຈຸບັນຂອງ Prism ແລ້ວ. ເມື່ອໝົດອາຍຸ, ໂຫຼດຄືນໃໝ່ແລະນຳເຂົ້າຈາກ Prism ອີກຄັ້ງ."
 }
