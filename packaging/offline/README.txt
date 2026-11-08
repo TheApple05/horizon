@@ -1,5 +1,7 @@
 Horizon Offline 26.3 - Automatic Setup - Windows x64
 
+Single EXE download: open Horizon-Offline-Windows.exe. It manages this application folder under %LOCALAPPDATA%/HorizonOffline automatically; you do not need to extract anything. Reopen that same downloaded EXE to play again. Your resources and saves are preserved there. The ZIP instructions below are for the underlying portable package.
+
 Extract the whole ZIP into a writable folder. Double-click Start-Horizon-Offline.cmd.
 
 On first launch, setup downloads the pinned Minecraft files and portable Java from Mojang, verifies vendor hashes, and prepares the resources locally. It also places Java's verified Windows runtime DLLs beside the game. No file copying, account sign-in, compiler, Java installation or administrator installer is needed. An internet connection is required for first-run downloads; keep the setup window open until it starts the game. Interrupted downloads resume when you run the same launcher again.

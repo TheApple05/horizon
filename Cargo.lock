@@ -1791,7 +1791,9 @@ dependencies = [
  "horizon-prepare",
  "serde_json",
  "sha1",
+ "sha2",
  "ureq",
+ "zip",
 ]
 
 [[package]]

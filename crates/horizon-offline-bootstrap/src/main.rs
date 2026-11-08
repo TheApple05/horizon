@@ -22,7 +22,7 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!(
-                "Setup could not finish: {error}\nRun Start-Horizon-Offline.cmd again to resume."
+                "Setup could not finish: {error}\nOpen this launcher again to resume."
             );
             ExitCode::FAILURE
         }
