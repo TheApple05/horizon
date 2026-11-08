@@ -1,0 +1,19 @@
+[package]
+name = "horizon-offline-bootstrap"
+version = "0.1.1"
+edition = "2024"
+license.workspace = true
+rust-version = "1.90"
+
+[dependencies]
+dirs = "6"
+serde_json = "1"
+sha1 = "0.10"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+[dev-dependencies]
+horizon-prepare = { path = "../horizon-prepare" }
+
+[[bin]]
+name = "horizon-offline"
+path = "src/main.rs"
