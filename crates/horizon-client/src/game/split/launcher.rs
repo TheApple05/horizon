@@ -2,9 +2,7 @@
 use horizon_client::auth::AuthSession;
 use std::sync::Arc;
 
-/// The launcher's other signed-in accounts (`HORIZON_ACCOUNT_SESSIONS`: name, uuid and a session
-/// file each), for splitscreen players to sign in with: read at start beside `--session-file`
-/// (`read_now`), as the files go when read and are refused once a couple of minutes old.
+/// This offline fork exposes no signed-in accounts to splitscreen.
 pub(super) fn accounts() -> Vec<Arc<AuthSession>> {
     READ.get_or_init(read).0.clone()
 }
@@ -15,18 +13,12 @@ pub(super) fn unavailable() -> Vec<String> {
     READ.get_or_init(read).1.clone()
 }
 
-/// Read (and so delete) the session files now, before the game loads.
-pub(in crate::game) fn read_now() {
-    READ.get_or_init(read);
-}
-
 fn read() -> (Vec<Arc<AuthSession>>, Vec<String>) {
-    let Ok(json) = std::env::var("HORIZON_ACCOUNT_SESSIONS") else {
-        return Default::default();
-    };
-    parse(&json)
+    // Offline-only fork: never consume another account's session file.
+    Default::default()
 }
 
+#[cfg(test)]
 fn parse(json: &str) -> (Vec<Arc<AuthSession>>, Vec<String>) {
     let list: Vec<serde_json::Value> = serde_json::from_str(json).unwrap_or_default();
     let mut sessions = Vec::new();

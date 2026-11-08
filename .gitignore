@@ -35,3 +35,7 @@
 
 # Release-only compiled original exporter bundle.
 /exporters/
+
+# Local offline builds and isolated play data.
+/dist/
+/.local-build.log
