@@ -451,17 +451,19 @@ pub(super) fn buttons(w: f32, h: f32, creative: bool, o: &WorldOptions) -> Vec<B
                 25,
             ),
             // PresetEditor.EDITORS: flat worlds have CreateFlatWorldScreen, the
-            // single-biome preset CreateBuffetWorldScreen; the other presets
-            // have no editor, so the button is disabled for them.
+            // single-biome preset CreateBuffetWorldScreen. Native presets opt
+            // into an editor; other presets keep the button disabled.
             b(
                 gx + 160.0,
                 gy,
                 150.0,
                 tr("selectWorld.customizeType"),
-                matches!(
-                    o.world_type,
-                    crate::save::WorldPreset::Flat | crate::save::WorldPreset::SingleBiomeSurface
-                ),
+                matches!(o.world_type, crate::save::WorldPreset::Custom(preset) if crate::save::custom_presets::editor(preset).is_some())
+                    || matches!(
+                        o.world_type,
+                        crate::save::WorldPreset::Flat
+                            | crate::save::WorldPreset::SingleBiomeSurface
+                    ),
                 26,
             ),
             // SwitchGrid: 44-wide value-only buttons at the grid's right.

@@ -19,6 +19,9 @@ use std::{
 mod buffet;
 mod confirm_experiments;
 mod create_world;
+mod custom_preset;
+mod mode;
+pub use mode::Mode;
 mod experiments;
 mod flat;
 mod onboarding;
@@ -265,107 +268,6 @@ pub enum Alert {
     /// `symlink_warning.title.world`
     /// (`NoticeWithLinkScreen.createWorldSymlinkWarningScreen`).
     Symlink,
-}
-#[derive(Clone, Debug)]
-pub enum Mode {
-    Main,
-    Select {
-        worlds: Vec<WorldEntry>,
-        selected: Option<usize>,
-    },
-    Create {
-        name: String,
-        seed: String,
-        creative: bool,
-        focus: u8,
-        options: WorldOptions,
-    },
-    Edit {
-        world: WorldEntry,
-        name: String,
-        focused: bool,
-    },
-    Backup {
-        world: WorldEntry,
-    },
-    /// BackupConfirmScreen over a world whose file fixes are due, or, with `downgrade`
-    /// (the saved version's name), over a world saved by a newer version.
-    BackupBeforeUpgrade {
-        world: WorldEntry,
-        downgrade: Option<String>,
-        /// With neither of the above: `WorldOpenFlows.askForBackup` over a customized or
-        /// experimental world (`openWorldCheckWorldStemCompatibility`).
-        stem: Option<StemIssue>,
-    },
-    /// EditWorldScreen's Optimize World: BackupConfirmScreen with the Erase Cached Data box.
-    OptimizeConfirm {
-        world: WorldEntry,
-        /// The Edit World screen's name field, restored by Cancel.
-        name: String,
-        erase_cache: bool,
-    },
-    /// `OptimizeWorldScreen`: the progress of `Title.optimize`.
-    Optimize {
-        world: WorldEntry,
-    },
-    /// `openWorldCheckDiskSpace`'s ConfirmScreen: little space is left on the device.
-    LowDiskSpace {
-        world: WorldEntry,
-    },
-    Delete {
-        world: WorldEntry,
-    },
-    /// RecoverWorldDataScreen: opening a world whose level.dat does not read
-    /// (WorldOpenFlows.openWorldLoadLevelData) lists what is wrong with
-    /// level.dat and level.dat_old and offers to go back to the old one.
-    Recover {
-        world: WorldEntry,
-        /// `collectIssue` for level.dat, then level.dat_old.
-        issues: [Option<crate::save::DatIssue>; 2],
-    },
-    /// Where `attemptRestore` ends: the "Recovery done" ConfirmScreen
-    /// (Continue opens the world), or its AlertScreen when it failed.
-    Recovered {
-        world: WorldEntry,
-        success: bool,
-    },
-    Error {
-        message: String,
-        return_to: Box<Mode>,
-        /// An AlertScreen, not the access failure.
-        alert: Option<Alert>,
-    },
-    Multiplayer(crate::multiplayer::Screen),
-    Realms(crate::realms::Screen),
-    /// SafetyScreen: the warning before the first Multiplayer click, with its
-    /// "Do not show this screen again" box.
-    MultiplayerWarning {
-        check: bool,
-    },
-    /// CreateFlatWorldScreen over Create New World: the fields that screen
-    /// keeps and the superflat editor on top of them.
-    CreateFlat {
-        name: String,
-        seed: String,
-        creative: bool,
-        focus: u8,
-        options: WorldOptions,
-        flat: flat::State,
-    },
-    /// CreateBuffetWorldScreen over Create New World: the single-biome
-    /// preset's biome list, over the fields that screen keeps.
-    CreateBuffet {
-        name: String,
-        seed: String,
-        creative: bool,
-        focus: u8,
-        options: WorldOptions,
-        buffet: buffet::State,
-    },
-    /// AccessibilityOnboardingScreen: the first screen of a first launch.
-    Onboarding(Onboarding),
-    /// `BanNoticeScreens`: a ConfirmLinkScreen `Gui.addInitialScreens` queued.
-    BanNotice(crate::ban_notice::Notice),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
@@ -759,36 +661,6 @@ fn rolls_user_splash(text: &str, random: &mut impl RandomSource, date: (u32, u32
         .is_ok_and(|size| size > 0 && random.next_int_bound(size) == Ok(42))
 }
 
-impl Mode {
-    /// The id native mods see for this screen (`NativeScreenView.id`, the
-    /// screen hooks): one per variant, a hook's contract, so it stays the
-    /// same from release to release. A new variant must add one.
-    pub fn id(&self) -> &'static str {
-        match self {
-            Self::Main => "title",
-            Self::Realms(_) => "realms",
-            Self::Select { .. } => "world_select",
-            Self::Create { .. } => "world_create",
-            Self::CreateFlat { .. } => "world_create_flat",
-            Self::CreateBuffet { .. } => "world_create_buffet",
-            Self::Edit { .. } => "world_edit",
-            Self::Backup { .. } => "world_backup",
-            Self::BackupBeforeUpgrade { .. } => "world_backup_confirm",
-            Self::OptimizeConfirm { .. } => "world_optimize_confirm",
-            Self::Optimize { .. } => "world_optimize",
-            Self::LowDiskSpace { .. } => "low_disk_space",
-            Self::Delete { .. } => "world_delete",
-            Self::Recover { .. } => "world_recover",
-            Self::Recovered { .. } => "world_recovered",
-            Self::Error { .. } => "error",
-            Self::Multiplayer(screen) => screen.id(),
-            Self::MultiplayerWarning { .. } => "multiplayer_warning",
-            Self::Onboarding(_) => "onboarding",
-            Self::BanNotice(_) => "ban_notice",
-        }
-    }
-}
-
 impl Title {
     /// Names the player for the `<NAME> IS YOU` splash; `name` is only asked for when that splash was rolled.
     pub fn with_user(mut self, name: impl FnOnce() -> String) -> Self {
@@ -1178,6 +1050,10 @@ impl Title {
     }
     /// The pointer moved with the button held (`mouseDragged`).
     pub fn drag(&mut self, cursor: (f32, f32), size: (f32, f32)) {
+        if let Mode::CreateCustom { state, .. } = &mut self.mode {
+            state.drag(cursor, size);
+            return;
+        }
         if let Some(rules) = self.rules.get_mut() {
             return rules.drag(cursor.1, size.1.ceil());
         }
@@ -1204,6 +1080,9 @@ impl Title {
     }
     /// The button was released (`onRelease`).
     pub fn release(&mut self) {
+        if let Mode::CreateCustom { state, .. } = &mut self.mode {
+            state.release();
+        }
         if let Some(rules) = self.rules.get_mut() {
             rules.release();
         }
@@ -2037,6 +1916,7 @@ impl Title {
             } => create_world::buttons(w, h, *creative, options),
             Mode::CreateFlat { flat, .. } => flat::buttons(w, h, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::buttons(w, h, buffet),
+            Mode::CreateCustom { state, .. } => custom_preset::buttons(w, h, state),
             Mode::Edit { world, name, .. } => {
                 let x = (w / 2.0).floor() - 100.0;
                 let top = edit_top(h);
@@ -2415,6 +2295,14 @@ impl Title {
                     "createWorld.customize.buffet.title",
                     "Single Biome Customization",
                 ),
+            ),
+            Mode::CreateCustom { state, .. } => ScreenInfo::new(
+                "create_world/custom",
+                Text::translate(
+                    "horizon.customize.title",
+                    &[Text::translate(state.preset.label(), &[])],
+                )
+                .plain(),
             ),
             Mode::Edit { .. } => {
                 ScreenInfo::new("edit_world", get("selectWorld.edit.title", "Edit World"))
@@ -2926,6 +2814,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             } => self.draw_create(atlas, batch, cursor, name, seed, *focus, options),
             Mode::CreateFlat { flat, .. } => flat::draw(self, atlas, items, batch, cursor, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::draw(self, atlas, batch, cursor, buffet),
+            Mode::CreateCustom { state, .. } => custom_preset::draw(atlas, batch, state),
             Mode::Edit { name, focused, .. } => {
                 crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
                 centered(
@@ -3373,6 +3262,11 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         // The hovered button's `Tooltip`, drawn once the widgets are.
         let mut button_tooltip = None;
         for b in self.buttons(w, h) {
+            if let Mode::CreateCustom { state, .. } = &self.mode
+                && custom_preset::draw_slider(self, atlas, batch, cursor, state, &b)
+            {
+                continue;
+            }
             crate::widgets::record(&b.label, [b.x, b.y, b.w, 20.0], b.enabled);
             // Realms' icon buttons have no label to record.
             if b.enabled && b.label.trim().is_empty() {
@@ -3666,6 +3560,10 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         ) {
             // A press on a text field takes the focus from the button.
             self.focused_button = None;
+        }
+        if matches!(self.mode, Mode::CreateCustom { .. }) {
+            self.custom_preset_click(hit, Some(x), (w, h));
+            return (Action::None, hit.is_some());
         }
         if matches!(self.mode, Mode::CreateBuffet { .. }) {
             self.buffet_click(x, y, (w, h), hit);
@@ -4052,6 +3950,12 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 };
                 Action::None
             }
+            (Mode::Create { options, .. }, Some(26))
+                if matches!(options.world_type, crate::save::WorldPreset::Custom(_)) =>
+            {
+                self.open_custom_preset();
+                Action::None
+            }
             // CreateFlatWorldScreen for the flat preset.
             (
                 Mode::Create {
@@ -4285,6 +4189,15 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// `confirm_key` with actual viewport size for button geometry lookup.
     /// Returns the triggered action and whether a UI button click sound should play.
     pub fn confirm_key_size(&mut self, size: (f32, f32)) -> (Action, bool) {
+        if matches!(self.mode, Mode::CreateCustom { .. }) {
+            let hit = self.focused_button.filter(|id| {
+                self.buttons(size.0, size.1)
+                    .iter()
+                    .any(|b| b.id == *id && b.enabled)
+            });
+            self.custom_preset_click(hit, None, size);
+            return (Action::None, hit.is_some());
+        }
         self.remember_direct_address();
         if self.rules.get_mut().is_some() {
             return (Action::None, false);
@@ -4559,6 +4472,16 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// 2D spatial arrow key navigation across enabled buttons.
     pub fn arrow_key(&mut self, key: winit::keyboard::KeyCode, size: (f32, f32), shift: bool) {
         use winit::keyboard::KeyCode;
+        if matches!(key, KeyCode::ArrowLeft | KeyCode::ArrowRight)
+            && let (Mode::CreateCustom { state, .. }, Some(id)) =
+                (&mut self.mode, self.focused_button)
+            && custom_preset::buttons(size.0, size.1, state)
+                .iter()
+                .any(|b| b.id == id)
+            && state.adjust(id, if key == KeyCode::ArrowLeft { -1.0 } else { 1.0 })
+        {
+            return;
+        }
         if self.rules.get_mut().is_some() {
             return;
         }
@@ -4987,6 +4910,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 }
             }
             Mode::CreateBuffet { .. } => self.close_buffet(false),
+            Mode::CreateCustom { .. } => self.close_custom_preset(false),
             Mode::Create { .. } => self.cancel_create(),
             // Screen.keyPressed: Escape closes the screen, which fades out.
             Mode::Onboarding(_) => self.onboarding_close(),

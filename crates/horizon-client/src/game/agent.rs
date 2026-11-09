@@ -683,6 +683,11 @@ impl Game<'_> {
                 "biome": buffet.biome(),
                 "query": buffet.query(),
             }),
+            Mode::CreateCustom { state, .. } => json!({
+                "mode": "customize-native-preset",
+                "preset": state.preset.id(),
+                "settings": state.value,
+            }),
             Mode::Edit {
                 world,
                 name,
