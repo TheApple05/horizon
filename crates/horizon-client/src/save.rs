@@ -3497,6 +3497,18 @@ pub fn write_world_gen_settings_with(
     flat_settings: Option<Tag>,
     single_biome: Option<&str>,
 ) -> Result<()> {
+    write_world_gen_settings_customized(dir, seed, options, flat_settings, single_biome, None)
+}
+
+/// The create screen's world-local custom stem, validated before writing saved data.
+pub fn write_world_gen_settings_customized(
+    dir: &Path,
+    seed: i64,
+    options: WorldGen,
+    flat_settings: Option<Tag>,
+    single_biome: Option<&str>,
+    custom_overworld: Option<Tag>,
+) -> Result<()> {
     fs::create_dir_all(dir)?;
     // worldgen/world_preset/flat.json's overworld: the classic flat layers.
     let layer = |block: &str, height: i32| {
@@ -3580,7 +3592,10 @@ pub fn write_world_gen_settings_with(
             "minecraft:overworld",
             preset("minecraft:overworld"),
         ),
-        WorldPreset::Custom(preset) => custom_presets::generate(preset)?,
+        WorldPreset::Custom(preset) => match custom_overworld {
+            Some(stem) => custom_presets::validate_custom_stem(preset, stem)?,
+            None => custom_presets::generate(preset)?,
+        },
         // worldgen/world_preset/debug_all_block_states.json's overworld.
         WorldPreset::Debug => Tag::compound([
             ("type", string("minecraft:overworld")),
