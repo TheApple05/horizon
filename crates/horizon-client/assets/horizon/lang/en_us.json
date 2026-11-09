@@ -1,4 +1,8 @@
 {
+  "horizon.customize.title": "%s Settings",
+  "horizon.customize.previous": "Previous",
+  "horizon.customize.next": "Next",
+  "horizon.customize.error": "Cannot apply these settings. Reset or cancel to continue.",
   "horizon.multiplayer.horizon_via.title": "ViaHorizon",
   "horizon.multiplayer.horizon_via.search": "Search",
   "horizon.multiplayer.horizon_via.auto": "Auto Detect",
