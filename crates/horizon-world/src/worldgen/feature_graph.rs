@@ -28,6 +28,7 @@ pub struct PlacedFeatureDefinition {
 }
 #[derive(Clone, Debug)]
 pub enum FeatureDefinition {
+    External(std::sync::Arc<dyn super::external_feature::ExternalFeature>),
     Basic(BasicFeature),
     NeighborSpread {
         provider: super::state_provider::BlockStateProvider,
@@ -306,12 +307,19 @@ impl FeatureDefinition {
         remaining: &mut usize,
         empty_tags: &BTreeSet<String>,
         blocks: Option<&FeatureBlockBindings<'_>>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<FeatureDefinition, DecodeError> {
         visit(depth, remaining)?;
         let object: Object = serde_json::from_str(json)?;
         let kind = identifier(&serde_json::from_str::<String>(
             required(&object, "type")?.get(),
         )?)?;
+        if !kind.starts_with("minecraft:")
+            && let Some(blocks) = blocks
+            && let Some(decoder) = &blocks.external_decoder
+            && let Some(result) = decoder.decode(&kind, json, blocks)
+        {
+            return result.map(Self::External);
+        }
         match kind.as_str() {
             "minecraft:no_op" => Ok(Self::NoOp),
             "minecraft:template" => super::structure::features::TemplateFeature::decode(
@@ -851,6 +859,9 @@ impl FeatureDefinition {
     ) -> Result<bool, FeatureExecutionError<W::Error>> {
         let mut placer = FeaturePlacer::new();
         match self {
+            Self::External(feature) => feature
+                .place(world, origin)
+                .map_err(FeatureExecutionError::Query),
             Self::Basic(feature) => feature
                 .place(world, random, origin, run.blocks)
                 .map_err(FeatureExecutionError::Basic),

@@ -103,6 +103,11 @@ fn possible_biomes(source: &ResolvedBiomeSource) -> Vec<String> {
         .into_iter()
         .cloned()
         .collect(),
+        ResolvedBiomeSource::Mapped(source) => {
+            let mut names = possible_biomes(source.source());
+            names.extend(source.additional_biomes().iter().cloned());
+            names
+        }
         other => other
             .possible_biomes()
             .into_iter()
@@ -165,6 +170,14 @@ impl Decoration {
         source: &ResolvedBiomeSource,
         flat: Option<FlatDecoration>,
     ) -> Result<Option<Self>, GeneratorError> {
+        Self::new_with_decoder(data, source, flat, None)
+    }
+    pub(super) fn new_with_decoder(
+        data: &Arc<GeneratorData>,
+        source: &ResolvedBiomeSource,
+        flat: Option<FlatDecoration>,
+        decoder: Option<Arc<dyn super::external_feature::ExternalFeatureDecoder>>,
+    ) -> Result<Option<Self>, GeneratorError> {
         let Some(resources) = &data.feature_resources else {
             return Ok(None);
         };
@@ -188,6 +201,9 @@ impl Decoration {
             .feature_block_bindings()?
             .with_fluid_tags(&resources.fluid_tags)?
             .with_biomes(biomes.clone());
+        if let Some(decoder) = decoder {
+            bindings = bindings.with_external_decoder(decoder);
+        }
         if let Some(structures) = &data.structures {
             bindings = bindings.with_structures(structures.clone());
         }
@@ -1589,6 +1605,16 @@ impl PlacementContext for World<'_> {
             .copied()
             .map_err(Into::into)
     }
+    fn noise_biome_is(&mut self, quart: [i32; 3], name: &str) -> Result<bool, PlacementQueryError> {
+        let id = self
+            .region
+            .noise_biome(&self.biomes, quart)
+            .map_err(PlacementQueryError::from)?;
+        self.biome_names
+            .get(id.0 as usize)
+            .map(|actual| actual.as_ref() == name)
+            .ok_or_else(|| PlacementQueryError::Failed("noise biome outside registry".into()))
+    }
     fn biome_allows_feature(
         &mut self,
         position: [i32; 3],
@@ -1719,6 +1745,47 @@ mod tests {
     use super::loot_table_nbt;
     use crate::registry::BlockRegistry;
     use horizon_core::random::{LegacyRandom, RandomSource};
+
+    #[test]
+    fn mapped_biomes_keep_delegate_encounter_order_before_new_features() {
+        use crate::worldgen::{
+            biome::MultiNoiseBiomeSource,
+            biome_source::{BiomeMapper, ResolvedBiomeSource},
+        };
+        #[derive(Debug)]
+        struct Mapper(Vec<String>);
+        impl BiomeMapper for Mapper {
+            fn additional_biomes(&self) -> &[String] {
+                &self.0
+            }
+            fn map<'a>(
+                &'a self,
+                parent: &'a str,
+                _: [i32; 3],
+            ) -> Result<&'a str, horizon_core::density::SampleError> {
+                Ok(parent)
+            }
+        }
+        let source = ResolvedBiomeSource::MultiNoise(
+            MultiNoiseBiomeSource::from_quantized_json(
+                r#"[
+            {"coordinates":[[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]],"offset":0,"biome":"z"},
+            {"coordinates":[[1,1],[0,0],[0,0],[0,0],[0,0],[0,0]],"offset":0,"biome":"a"}
+        ]"#,
+            )
+            .unwrap(),
+        );
+        let mapped = source
+            .with_mapper(std::sync::Arc::new(Mapper(vec![
+                "example:variant".into(),
+                "minecraft:z".into(),
+            ])))
+            .unwrap();
+        assert_eq!(
+            super::possible_biomes(&mapped),
+            ["minecraft:z", "minecraft:a", "example:variant"]
+        );
+    }
 
     /// Air, a chest, a dispenser and a furnace: one randomizable container the
     /// worldgen callers place, three they do not, and one plain container.
