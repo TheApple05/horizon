@@ -8899,15 +8899,14 @@ impl Game<'_> {
                             point,
                         });
                     }
-                } else if !first && !self.res.facts().is_air(state) && f.fluid == Fluid::None {
-                    // `ClipContext.Block.OUTLINE`: the ray stops at the block's
-                    // outline, not its cell; it passes through the empty part
-                    // of a torch, a fence or a flower to the water behind.
-                    if let Some(hit) =
+                } else if !first
+                    && !self.res.facts().is_air(state)
+                    && f.fluid == Fluid::None
+                    // A ray may pass through empty space in a torch or fence cell.
+                    && let Some(hit) =
                         outline_stop(origin, dir, self.reach(), b, face, || self.outline_boxes(b))
-                    {
-                        return Some(hit);
-                    }
+                {
+                    return Some(hit);
                 }
                 last = b;
                 first = false;
@@ -11668,14 +11667,14 @@ impl Game<'_> {
                 PhysicalKey::Code(key) => self.screen_key_pressed(key, key_event.repeat),
                 PhysicalKey::Unidentified(_) => false,
             };
-            if self.screen == Screen::Options && self.screen_hooks_open() {
-                // The hook after the key's own, then the text the key path
-                // types in place (its own routing keeps it).
-                if let Some(text) = key_event.text.as_deref() {
-                    let left = self.screen_text_typed(text);
-                    if left.as_deref() != Some(text) {
-                        key_event.text = left.map(Into::into);
-                    }
+            // The hook follows the key's own routing, which keeps the text it types in place.
+            if self.screen == Screen::Options
+                && self.screen_hooks_open()
+                && let Some(text) = key_event.text.as_deref()
+            {
+                let left = self.screen_text_typed(text);
+                if left.as_deref() != Some(text) {
+                    key_event.text = left.map(Into::into);
                 }
             }
             // Title boxes keep their text on the key path. A field hook takes
