@@ -3,7 +3,9 @@ mod codec;
 mod runtime;
 pub use codec::{BiomeSet, BiomeSourceCatalog, BiomeSourceDefinition};
 use horizon_core::density::{DensitySampler, SampleError, SamplerContext};
-pub use runtime::{BiomeSourceError, BiomeSourceResolver, ResolvedBiomeSource};
+pub use runtime::{
+    BiomeMapper, BiomeSourceError, BiomeSourceResolver, MappedBiomeSource, ResolvedBiomeSource,
+};
 
 #[derive(Clone, Debug)]
 pub struct FixedBiomeSource<T> {

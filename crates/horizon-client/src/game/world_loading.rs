@@ -170,12 +170,13 @@ impl WorldRequest {
             level.hardcore = o.hardcore;
             level.difficulty = horizon_client::title::DIFFICULTIES[o.difficulty()].into();
             level.allow_commands = Some(o.commands(creative));
-            horizon_client::save::write_world_gen_settings_with(
+            horizon_client::save::write_world_gen_settings_customized(
                 &save_root,
                 level.seed,
                 o.world_gen(),
                 o.flat_settings(),
                 o.single_biome(),
+                o.custom_overworld(),
             )?;
             // The DataPackConfig the screen chose: the picked packs on,
             // everything else disabled — the feature packs left out, and the
@@ -668,12 +669,12 @@ pub(super) fn make_streaming(
         horizon_client::save::dimension_dir(world_root, dim.id()),
         shape,
     ));
-    if dim == Dim::End {
-        // Migrate before any chunk reader can cache the old block entities. A side file it
-        // can't read stays where it is and costs only its old exits: the End still opens.
-        if let Err(e) = save.migrate_end_gateway_exits() {
-            log::warn!("Horizon: End gateway exits not migrated: {e}");
-        }
+    // Migrate before any chunk reader can cache the old block entities. A side file it
+    // can't read stays where it is and costs only its old exits: the End still opens.
+    if dim == Dim::End
+        && let Err(e) = save.migrate_end_gateway_exits()
+    {
+        log::warn!("Horizon: End gateway exits not migrated: {e}");
     }
     // The world's packs over the game's biomes (`RegistryDataLoader`
     // layering): the generator names the ids and the client draws them.

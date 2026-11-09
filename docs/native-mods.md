@@ -114,6 +114,18 @@ their numeric sprite-set handles cannot refer to a different reloaded set.
 
 ## Pinned to a Nightly
 
+### World-generation constructor injections
+
+`horizon_world::worldgen::generator::OverworldGenerator::for_world_with_settings`
+uses an explicit `Result<OverworldGenerator, GeneratorError>` return type so a
+revision-pinned native bundle can apply a cancellable HEAD hook with the pinned
+horizon-mixins tool. The type is the same as `Result<Self, GeneratorError>`;
+ordinary generation is unchanged. The constructor serves noise dimensions in
+single player and dedicated servers. A replacement must gate its intended
+dimension and world seed, supply coherent terrain, biome, surface and distant
+sampling behavior, and return an error when required data is unavailable.
+This is a revision-pinned injection target, not a numbered stable native hook.
+
 A native mod builds on one exact Horizon commit: `[compatibility] horizon_revision` in its `horizon-mixin.toml`,
 and `horizon` in the `horizon-native.json` of its registry file (`.hnmod`, `horizon_mods::index::native`). Mods
 pin a **Nightly's commit** (or a release's). Every Nightly ships its source and keeps its commit for good as the
@@ -5017,6 +5029,23 @@ The following catalog hooks are not in the trait yet:
 
 The client `tooltip_color` hook changes the background and top and bottom border gradient colours as mutable ARGB `u32` values; it does not change text colours. It covers solid-fill item tooltips (including creative, recipe book, chat, trading and bundle-selected item names), screen text boxes, and native panel tooltips. The stack is `None` for text-only boxes, including recipe-book item lines where the stack is discarded before drawing. Sprite-based screen tooltips (including options and title screens) use a separate renderer and are not covered; no texture hook is offered.
 
+# World-owned biome mappings
+
+A procedural generator can wrap a `ResolvedBiomeSource` with `with_mapper` and
+an `Arc<dyn BiomeMapper>`. Declare additional namespaced biome IDs in
+`additional_biomes` before constructing the pipeline. The mapper runs after the
+delegate's scalar or prepared-volume query, retains the delegate's search/tie
+state, and may return its input or one of the complete declared possible-biome
+set. Undeclared results and sampling errors propagate to the caller.
+
+The generator's native source module can call `Pipeline::new_with_biome_mapper`
+to install this wrapper before decoration and structure catalogs are built.
+Extra biome definitions and their features/tags still need registry resources.
+Delegate feature encounter order is preserved, with additional biomes appended;
+mapped decoration is world-owned so it cannot reuse a preloaded vanilla
+source-JSON cache entry. Dropping the world releases the mapper. Ordinary
+constructors pass no mapper and retain their original source.
+
 # Camera and collision reads
 
 The `native_camera()` helper returns the most recently extracted world frame's camera, or none before one exists. Its position, interpolated eye height, partial tick, angles, final FOV, near/far planes and dimension accompany column-major view and projection matrices. The view is camera-relative and includes bob and spin; projection uses reversed Z. Earlier callbacks in a frame can see the previous frame. `native_block_collision(pos)` returns block-local `[min_x, min_y, min_z, max_x, max_y, max_z]` boxes with an empty collision context; unloaded blocks and collision errors give no boxes.
@@ -5030,3 +5059,84 @@ unchanged. The list has already been shuffled; entity knockback and the shuffle'
 random draws are unaffected. A breeze blocked by `mob_griefing` does not call the hook.
 This is separate from `explosion_detonate`, and does not cancel the burst's sound,
 particles or entity effects. The pending fragment assigns its API number at merge.
+
+
+
+# Native world presets
+
+A native module can register a `horizon_client_lib::save::custom_presets::CustomPreset`
+once, before reading the world-type catalog. Its static namespaced ID and
+translation key appear after the five built-in choices, in registration order.
+The built-in `WorldPreset::ALL` stays unchanged; `WorldPreset::all()`, the
+create-world button's next/previous actions and ID lookup include registrations.
+The catalog accepts at most 64 entries and rejects duplicate IDs, the
+`minecraft` namespace, malformed identifiers and empty/oversized labels.
+
+The `overworld` callback returns the complete overworld level stem as an NBT
+`Tag`. The regular save writer preserves the chosen seed and generation flags,
+with the ordinary Nether and End stems. A callback failure or malformed stem
+returns an error before writing the settings file. The `recognizes` callback
+receives a saved overworld generator and lets the create/recreate flow recover
+the custom choice. Recognizers must identify their own generators narrowly;
+built-in flat, debug, large-biomes, amplified and fixed-biome recognition keeps
+priority. Both callbacks run outside the catalog lock, so reading metadata from
+a callback is safe.
+
+Registration stores only static metadata and function pointers. World owners,
+generator state and caches belong to the constructed world. Supplying the stem
+does not implement a generator: a native mod must also handle its own world
+constructor and resource integration. This API does not change vanilla choices
+when no custom preset is registered.
+
+# Seed-derived native world features
+
+`horizon_world::worldgen::feature_graph::FeatureDefinition::External` retains an
+`Arc<dyn external_feature::ExternalFeature>` in the executable feature graph.
+The object is owned by that world's graph and its clones, never a process-wide
+feature registry. Dropping the last graph releases it. Ordinary JSON decoding
+still rejects unknown feature types; native modules must handle their own bounded
+configuration decoding and bind an external object explicitly. A native source
+module can call `Pipeline::new_with_extensions` with its biome mapper and a
+world-owned `ExternalFeatureDecoder`. The decoder receives the parsed custom
+type, JSON and block bindings after the normal depth/node-budget check. Minecraft
+types always keep built-in priority. A claimed type can return a decode error;
+an unclaimed type keeps the ordinary unknown-type error.
+
+Decoder bindings stay with the world's decoration, including lazy named-feature
+decodes after construction. These worlds bypass the shared source-JSON decoration
+cache so two worlds cannot alias retained native state. No thread-local owner or
+process-wide feature registry is used for later decoding.
+
+`ExternalFeature::place` receives an object-safe `ExternalFeatureWorld` and the
+candidate origin. It can query states, fluids, tags, heightmaps, world bounds,
+sea level, world seed and exact noise-biome quarts. Quart coordinates are already
+in biome units; `noise_biome_is` compares a canonical registry name without the
+fuzzy, seed-obfuscated block-biome lookup. Unavailable chunks/biomes and query
+errors propagate through the feature execution error, rather than becoming
+successful no-ops.
+
+The caller still applies the engine's ordinary decoration failure policy.
+Root placement errors increment the failed-feature count and can allow generation
+to continue; lazy named-feature decode errors can produce an absent feature.
+Returning an external error therefore does not guarantee that loading the entire
+world fails. Check generation diagnostics when qualifying a native feature pack.
+
+Writes use `set_chunk_block`, retaining generation-chunk heightmap updates and
+avoiding live neighbor/block-entity notifications. As with vanilla features,
+an error after an earlier write does not roll back that write. Native algorithms
+must bound their own loops and writes to the valid generation region.
+
+This interface exposes no decoration random stream. It supports algorithms with
+their own seed-derived noise or random state; an algorithm that consumes vanilla
+feature randomness needs a separate interface. Nesting an external feature in
+ordinary placed-feature composition retains the host's modifier order and
+budgets. With no external object bound, vanilla feature decoding and execution
+keep their existing paths. This API supplies no mod biome definitions or feature
+algorithms itself.
+
+Algorithms that compare Minecraft's biome-info noise as a double can call
+`horizon_world::worldgen::biome_temperature::biome_info_noise_f64`. The existing
+float helper retains its narrowing conversion; the double helper exposes the
+unrounded calculation. Neither helper consumes a world's decoration RNG.
+The renderer's `Biomes::load` uses a concrete `Result<Biomes>` return type so a
+native loader hook can name that result outside an inherent `Self` context.

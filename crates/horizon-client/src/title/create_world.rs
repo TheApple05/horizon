@@ -37,6 +37,8 @@ pub struct WorldOptions {
     pub single_biome: String,
     /// CreateFlatWorldScreen's layers and biome, kept with the world type.
     pub flat_settings: Option<super::flat::FlatSettings>,
+    /// A complete world-local stem; Re-Create retains it without replacing invalid settings.
+    pub custom_overworld: Option<horizon_world::nbt::Tag>,
     pub structures: bool,
     pub bonus_chest: bool,
     /// `getGameRules`: the Game Rules screen's values, saved with the world.
@@ -57,6 +59,7 @@ impl Default for WorldOptions {
             world_type: crate::save::WorldPreset::Normal,
             single_biome: "minecraft:plains".into(),
             flat_settings: None,
+            custom_overworld: None,
             structures: true,
             bonus_chest: false,
             rules: crate::gamerules::GameRules::default(),
@@ -85,6 +88,14 @@ impl WorldOptions {
             single_biome: fixed_biome(dir).unwrap_or_else(|| "minecraft:plains".into()),
             flat_settings: (generation.preset == crate::save::WorldPreset::Flat)
                 .then(|| super::flat::FlatSettings::from_world(dir))
+                .flatten(),
+            custom_overworld: matches!(generation.preset, crate::save::WorldPreset::Custom(_))
+                .then(|| {
+                    crate::save::world_gen_settings(dir)?
+                        .get("dimensions")?
+                        .get("minecraft:overworld")
+                        .cloned()
+                })
                 .flatten(),
             structures: generation.structures,
             bonus_chest: generation.bonus_chest,
@@ -187,6 +198,20 @@ impl WorldOptions {
         self.flat_settings
             .as_ref()
             .map(super::flat::FlatSettings::to_tag)
+    }
+
+    pub fn custom_overworld(&self) -> Option<horizon_world::nbt::Tag> {
+        let crate::save::WorldPreset::Custom(preset) = self.world_type else {
+            return None;
+        };
+        self.custom_overworld
+            .as_ref()
+            .filter(|stem| {
+                stem.get("generator")
+                    .and_then(crate::save::custom_presets::recognize)
+                    == Some(preset)
+            })
+            .cloned()
     }
     /// A press on one of the open tab's cycle buttons or switches.
     pub(super) fn press(&mut self, id: u8, creative: &mut bool) {
@@ -413,17 +438,19 @@ pub(super) fn buttons(w: f32, h: f32, creative: bool, o: &WorldOptions) -> Vec<B
                 25,
             ),
             // PresetEditor.EDITORS: flat worlds have CreateFlatWorldScreen, the
-            // single-biome preset CreateBuffetWorldScreen; the other presets
-            // have no editor, so the button is disabled for them.
+            // single-biome preset CreateBuffetWorldScreen. Native presets opt
+            // into an editor; other presets keep the button disabled.
             b(
                 gx + 160.0,
                 gy,
                 150.0,
                 tr("selectWorld.customizeType"),
-                matches!(
-                    o.world_type,
-                    crate::save::WorldPreset::Flat | crate::save::WorldPreset::SingleBiomeSurface
-                ),
+                matches!(o.world_type, crate::save::WorldPreset::Custom(preset) if crate::save::custom_presets::editor(preset).is_some())
+                    || matches!(
+                        o.world_type,
+                        crate::save::WorldPreset::Flat
+                            | crate::save::WorldPreset::SingleBiomeSurface
+                    ),
                 26,
             ),
             // SwitchGrid: 44-wide value-only buttons at the grid's right.

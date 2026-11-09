@@ -12,6 +12,10 @@ description = "Reusable client systems, control tool and parity probes"
 [lib]
 path = "../horizon-client/src/client_lib.rs"
 
+[[test]]
+name = "custom_world_preset"
+path = "../horizon-client/tests/custom_world_preset.rs"
+
 [dependencies]
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }

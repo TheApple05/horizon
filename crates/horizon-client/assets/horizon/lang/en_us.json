@@ -982,5 +982,9 @@
   "horizon.recipe_transfer.missing": "Missing Items",
   "horizon.recipe_transfer.no_room": "Inventory full",
   "horizon.recipe_transfer.unavailable": "Recipe does not fit this menu",
-  "horizon.recipe_transfer.unsupported": "Server requires a known recipe"
+  "horizon.recipe_transfer.unsupported": "Server requires a known recipe",
+  "horizon.customize.title": "%s Settings",
+  "horizon.customize.previous": "Previous",
+  "horizon.customize.next": "Next",
+  "horizon.customize.error": "Cannot apply these settings. Reset or cancel to continue."
 }

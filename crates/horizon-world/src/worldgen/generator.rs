@@ -365,7 +365,7 @@ impl GeneratorData {
         dir: &Path,
         registry: &'static BlockRegistry,
         ov: &WorldgenOverrides,
-    ) -> Result<Arc<Self>, GeneratorError> {
+    ) -> Result<Arc<GeneratorData>, GeneratorError> {
         let mut warnings = Vec::new();
         let flags: Vec<(bool, bool)> =
             serde_json::from_str(&fs::read_to_string(dir.join("block_flags.json"))?)?;
@@ -612,6 +612,13 @@ impl GeneratorData {
         source_json: &str,
         source: &ResolvedBiomeSource,
     ) -> Result<Option<Arc<super::generator_decoration::Decoration>>, GeneratorError> {
+        // source_json describes only the delegate. A world-owned mapper may
+        // add biomes even when the same vanilla delegate was already preloaded.
+        // Keep its decoration world-owned rather than aliasing that shared slot.
+        if matches!(source, ResolvedBiomeSource::Mapped(_)) {
+            return super::generator_decoration::Decoration::new(self, source)
+                .map(|decoration| decoration.map(Arc::new));
+        }
         let slot = {
             let mut cache = self.decorations.lock().unwrap_or_else(|e| e.into_inner());
             let slot = match cache.iter().position(|(k, _)| k == source_json) {
@@ -1042,11 +1049,58 @@ where
     fn new(
         data: Arc<GeneratorData>,
         seed: i64,
+        random: R,
+        generator: &Value,
+        settings_json: &Value,
+        with_structures: bool,
+        level: Option<(i32, i32)>,
+    ) -> Result<Self, GeneratorError> {
+        Self::new_with_biome_mapper(
+            data,
+            seed,
+            random,
+            generator,
+            settings_json,
+            with_structures,
+            level,
+            None,
+        )
+    }
+
+    /// Native source modules may supply a mapper before catalog construction.
+    /// The ordinary constructor retains its unwrapped source and behavior.
+    fn new_with_biome_mapper(
+        data: Arc<GeneratorData>,
+        seed: i64,
+        random: R,
+        generator: &Value,
+        settings_json: &Value,
+        with_structures: bool,
+        level: Option<(i32, i32)>,
+        biome_mapper: Option<Arc<dyn super::biome_source::BiomeMapper>>,
+    ) -> Result<Self, GeneratorError> {
+        Self::new_with_extensions(
+            data,
+            seed,
+            random,
+            generator,
+            settings_json,
+            with_structures,
+            level,
+            biome_mapper,
+            None,
+        )
+    }
+    fn new_with_extensions(
+        data: Arc<GeneratorData>,
+        seed: i64,
         mut random: R,
         generator: &Value,
         settings_json: &Value,
         with_structures: bool,
         level: Option<(i32, i32)>,
+        biome_mapper: Option<Arc<dyn super::biome_source::BiomeMapper>>,
+        decoder: Option<Arc<dyn super::external_feature::ExternalFeatureDecoder>>,
     ) -> Result<Self, GeneratorError> {
         let registry = data.registry;
         let noise = &settings_json["noise"];
@@ -1157,6 +1211,20 @@ where
             .decode(&source_json)?
             .resolve(&data.presets)
             .map_err(|e| resource(format!("biome source: {e}")))?;
+        let source = match biome_mapper {
+            Some(mapper) => {
+                let mapped = source
+                    .with_mapper(mapper)
+                    .map_err(|e| resource(format!("biome mapper: {e}")))?;
+                for name in mapped.possible_biomes() {
+                    if data.biome_id(name).is_none() {
+                        return Err(resource(format!("mapped biome has no definition: {name}")));
+                    }
+                }
+                mapped
+            }
+            None => source,
+        };
         let climate = router.climate_sampler();
         let mut noises = BTreeMap::new();
         for (name, json) in &data.noises {
@@ -1238,9 +1306,21 @@ where
             flat: None,
             dimension: "minecraft:overworld".to_owned(),
         };
-        pipeline.decoration = pipeline
-            .data
-            .decoration_for(&source_json, &pipeline.source)?;
+        pipeline.decoration = if let Some(decoder) = decoder {
+            // The same source JSON can have another world's decoder/owners.
+            // Retain these bindings locally, including lazy named features.
+            super::generator_decoration::Decoration::new_with_decoder(
+                &pipeline.data,
+                &pipeline.source,
+                None,
+                Some(decoder),
+            )?
+            .map(Arc::new)
+        } else {
+            pipeline
+                .data
+                .decoration_for(&source_json, &pipeline.source)?
+        };
         if with_structures {
             let possible = pipeline
                 .source
@@ -1480,7 +1560,7 @@ where
     /// with the state it already has. Check their imported material flags too.
     /// Noise filling already built the WG maps; these writes add no fluid marks.
     fn identity_end_surface(&self, pos: ChunkPos) -> bool {
-        if !matches!(self.source, ResolvedBiomeSource::End(_))
+        if !self.source.is_end()
             // At wrapped block coordinates the ordinary biome-region lookup
             // can fail; retain that lookup and its error outside this range.
             || ![pos.x, pos.z].into_iter().all(|c| {
@@ -3570,7 +3650,7 @@ impl OverworldGenerator {
         dimension: &str,
         with_structures: bool,
         saved_stem: Option<&Value>,
-    ) -> Result<Self, GeneratorError> {
+    ) -> Result<OverworldGenerator, GeneratorError> {
         let stem = if let Some(json) = data.dimensions.get(dimension) {
             serde_json::from_str(json)?
         } else if let Some(stem) = saved_stem {
@@ -4461,6 +4541,94 @@ mod tests {
             crate::level::data::load_registry(&root).expect("registry"),
         ));
         Some(GeneratorData::load(&root.join("worldgen"), registry).expect("worldgen data"))
+    }
+
+    #[test]
+    #[ignore = "requires the player's prepared 26.3 resources via HORIZON_RESOURCES"]
+    fn external_decoders_do_not_alias_preloaded_decoration_or_retain_worlds() {
+        use super::super::external_feature::{ExternalFeature, ExternalFeatureDecoder};
+        #[derive(Debug)]
+        struct Decoder;
+        impl ExternalFeatureDecoder for Decoder {
+            fn decode(
+                &self,
+                _: &str,
+                _: &str,
+                _: &super::super::block_feature::FeatureBlockBindings<'_>,
+            ) -> Option<Result<Arc<dyn ExternalFeature>, super::super::DecodeError>> {
+                None
+            }
+        }
+        let data = prepared_data().expect("prepared resource input required");
+        let normal: Value = serde_json::from_str(&data.world_presets["minecraft:normal"]).unwrap();
+        let generator = &normal["dimensions"]["minecraft:overworld"]["generator"];
+        let settings: Value =
+            serde_json::from_str(&data.settings[generator["settings"].as_str().unwrap()]).unwrap();
+        let baseline = Pipeline::new(
+            data.clone(),
+            1,
+            XoroshiroRandom::new(1),
+            generator,
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        let decoder = Arc::new(Decoder);
+        let first_owner = Arc::downgrade(&decoder);
+        let first = Pipeline::new_with_extensions(
+            data.clone(),
+            1,
+            XoroshiroRandom::new(1),
+            generator,
+            &settings,
+            false,
+            None,
+            None,
+            Some(decoder),
+        )
+        .unwrap();
+        let decoder = Arc::new(Decoder);
+        let second_owner = Arc::downgrade(&decoder);
+        let second = Pipeline::new_with_extensions(
+            data.clone(),
+            2,
+            XoroshiroRandom::new(2),
+            generator,
+            &settings,
+            false,
+            None,
+            None,
+            Some(decoder),
+        )
+        .unwrap();
+        assert!(!Arc::ptr_eq(
+            first.decoration.as_ref().unwrap(),
+            baseline.decoration.as_ref().unwrap()
+        ));
+        assert!(!Arc::ptr_eq(
+            first.decoration.as_ref().unwrap(),
+            second.decoration.as_ref().unwrap()
+        ));
+        drop(first);
+        assert!(first_owner.upgrade().is_none());
+        assert!(second_owner.upgrade().is_some());
+        drop(second);
+        assert!(second_owner.upgrade().is_none());
+        let after = Pipeline::new(
+            data,
+            3,
+            XoroshiroRandom::new(3),
+            generator,
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(
+            after.decoration.as_ref().unwrap(),
+            baseline.decoration.as_ref().unwrap()
+        ));
     }
 
     /// A superflat world decorates with what `adjustGenerationSettings` keeps of its biome
