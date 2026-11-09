@@ -59,6 +59,8 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+mod construction;
+
 #[derive(Debug)]
 pub enum GeneratorError {
     Io(io::Error),
@@ -365,7 +367,7 @@ impl GeneratorData {
         dir: &Path,
         registry: &'static BlockRegistry,
         ov: &WorldgenOverrides,
-    ) -> Result<Arc<Self>, GeneratorError> {
+    ) -> Result<Arc<GeneratorData>, GeneratorError> {
         let mut warnings = Vec::new();
         let flags: Vec<(bool, bool)> =
             serde_json::from_str(&fs::read_to_string(dir.join("block_flags.json"))?)?;
@@ -598,6 +600,13 @@ impl GeneratorData {
         source_json: &str,
         source: &ResolvedBiomeSource,
     ) -> Result<Option<Arc<super::generator_decoration::Decoration>>, GeneratorError> {
+        // source_json describes only the delegate. A world-owned mapper may
+        // add biomes even when the same vanilla delegate was already preloaded.
+        // Keep its decoration world-owned rather than aliasing that shared slot.
+        if matches!(source, ResolvedBiomeSource::Mapped(_)) {
+            return super::generator_decoration::Decoration::new(self, source)
+                .map(|decoration| decoration.map(Arc::new));
+        }
         let slot = {
             let mut cache = self.decorations.lock().unwrap_or_else(|e| e.into_inner());
             let slot = match cache.iter().position(|(k, _)| k == source_json) {
@@ -1045,239 +1054,6 @@ impl<R: RandomSource + 'static> Pipeline<R>
 where
     R::Positional: Clone + Send + Sync,
 {
-    fn new(
-        data: Arc<GeneratorData>,
-        seed: i64,
-        mut random: R,
-        generator: &Value,
-        settings_json: &Value,
-        with_structures: bool,
-        level: Option<(i32, i32)>,
-    ) -> Result<Self, GeneratorError> {
-        let registry = data.registry;
-        let noise = &settings_json["noise"];
-        let min_y = noise["min_y"]
-            .as_i64()
-            .ok_or_else(|| resource("noise min_y"))? as i32;
-        let height = noise["height"]
-            .as_i64()
-            .ok_or_else(|| resource("noise height"))? as i32;
-        let (level_min_y, level_height) = level.unwrap_or((min_y, height));
-        if min_y < level_min_y || min_y + height > level_min_y + level_height {
-            return Err(resource("noise range outside the dimension's build height"));
-        }
-        let codec = crate::registry::BlockStateJsonCodec::new(registry, data.integers.clone())
-            .map_err(|e| resource(e.to_string()))?;
-        let settings = Settings {
-            noise_min_y: min_y,
-            noise_height: height,
-            level_min_y,
-            level_height,
-            sea_level: settings_json["sea_level"]
-                .as_i64()
-                .ok_or_else(|| resource("sea_level"))? as i32,
-            default_block: state(&codec, &settings_json["default_block"])?,
-            default_fluid: state(&codec, &settings_json["default_fluid"])?,
-            legacy: settings_json["legacy_random_source"]
-                .as_bool()
-                .unwrap_or(false),
-            disable_mob_generation: settings_json["disable_mob_generation"]
-                .as_bool()
-                .unwrap_or(false),
-        };
-        let root = random.fork_positional();
-        let mut densities = DensityRegistry::from_json(&data.noises, &data.densities)?;
-        let router =
-            NoiseRouter::from_json(&settings_json["noise_router"].to_string(), &mut densities)?;
-        // NoiseGeneratorSettings.debugFunctions: a registered density or an
-        // inline one, each with its label.
-        let debug_functions = settings_json
-            .get("debug_functions")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .map(|entry| {
-                let label = entry["label"]
-                    .as_str()
-                    .ok_or_else(|| resource("debug label"))?;
-                let id = match &entry["function"] {
-                    Value::String(name) => densities
-                        .reference(name)
-                        .ok_or_else(|| resource(format!("debug function {name}")))?,
-                    inline => densities.decode_functions(&[&inline.to_string()])?[0],
-                };
-                Ok((label.to_owned(), id))
-            })
-            .collect::<Result<Vec<_>, GeneratorError>>()?;
-        let aquifers = settings_json
-            .get("aquifers")
-            .filter(|v| !v.is_null())
-            .map(|v| AquiferConfig::from_json(&v.to_string(), &mut densities))
-            .transpose()?;
-        let mut library = MaterialRuleLibrary::from_json(
-            &data.rules,
-            &data.conditions,
-            &codec,
-            densities,
-            seed,
-            settings.legacy,
-        )?;
-        let router = library.compile_router(router)?;
-        let debug_density = debug_functions
-            .into_iter()
-            .map(|(label, id)| Ok((label, library.function_sampler(id)?)))
-            .collect::<Result<Vec<_>, GeneratorError>>()?;
-        let aquifer = aquifers
-            .map(|config| library.compile_aquifer(config))
-            .transpose()?
-            .map(|samplers| AquiferField::ALL.map(|field| samplers.get(field).clone()));
-        let rule_name = settings_json["material_rule"]
-            .as_str()
-            .ok_or_else(|| resource("material_rule"))?;
-        let rule = library.rule(rule_name)?;
-        let preliminary = router.get(RouterField::ChunkSurfaceLevel).clone();
-        let spawn_target = match settings_json.get("spawn_target") {
-            Some(Value::Array(points)) => points
-                .iter()
-                .map(|point| {
-                    let Value::Object(fields) = point else {
-                        return Err(resource("spawn_target point"));
-                    };
-                    let parameters = fields
-                        .iter()
-                        .map(|(name, interval)| {
-                            Ok((
-                                library.named_density(name)?,
-                                decode_parameter(&interval.to_string())?,
-                            ))
-                        })
-                        .collect::<Result<_, GeneratorError>>()?;
-                    Ok(SpawnTargetPoint { parameters })
-                })
-                .collect::<Result<_, GeneratorError>>()?,
-            _ => Vec::new(),
-        };
-        let source_json = generator["biome_source"].to_string();
-        let source = data
-            .source_catalog
-            .decode(&source_json)?
-            .resolve(&data.presets)
-            .map_err(|e| resource(format!("biome source: {e}")))?;
-        let climate = router.climate_sampler();
-        let mut noises = BTreeMap::new();
-        for (name, json) in &data.noises {
-            let noise: Arc<dyn Noise> = Arc::new(
-                decode_noise(json)?
-                    .create(&mut root.from_hash_of(name))
-                    .map_err(DecodeError::from)?,
-            );
-            noises.insert(name.clone(), noise);
-        }
-        let noise = |name: &str| -> Result<Arc<dyn Noise>, GeneratorError> {
-            noises
-                .get(name)
-                .cloned()
-                .ok_or_else(|| resource(format!("missing noise {name}")))
-        };
-        let surface = MaterialSurface::new(
-            root.clone(),
-            ClayBandBlocks::from_registry(registry).ok_or_else(|| resource("clay bands"))?,
-            noise("minecraft:clay_bands_offset")?,
-            noise("minecraft:surface")?,
-            noise("minecraft:surface_secondary")?,
-        );
-        let default = |name: &str| {
-            registry
-                .default_state(name)
-                .ok_or_else(|| resource(format!("missing block {name}")))
-        };
-        let extensions = MaterialExtensions::new(
-            root.clone(),
-            ExtensionBlocks {
-                default: settings.default_block,
-                water: default("minecraft:water")?,
-                packed_ice: default("minecraft:packed_ice")?,
-                snow: default("minecraft:snow_block")?,
-            },
-            ExtensionNoises {
-                badlands_surface: noise("minecraft:badlands_surface")?,
-                badlands_pillar: noise("minecraft:badlands_pillar")?,
-                badlands_roof: noise("minecraft:badlands_pillar_roof")?,
-                iceberg_surface: noise("minecraft:iceberg_surface")?,
-                iceberg_pillar: noise("minecraft:iceberg_pillar")?,
-                iceberg_roof: noise("minecraft:iceberg_pillar_roof")?,
-            },
-            settings.sea_level,
-        );
-        let picker = GlobalFluidPicker::new(
-            settings.sea_level,
-            settings.default_fluid,
-            default("minecraft:lava")?,
-            default("minecraft:air")?,
-        );
-        let mut pipeline = Self {
-            zoom: BiomeZoom::new(obfuscate_seed(seed)),
-            data,
-            seed,
-            settings,
-            root,
-            router,
-            climate,
-            aquifer,
-            rule,
-            preliminary,
-            source,
-            surface,
-            noises,
-            extensions,
-            picker,
-            biome_cache: Mutex::new(HashMap::new()),
-            lattice_cache: Mutex::new(HashMap::new()),
-            biome_work: ChunkWork::new(),
-            carver_cache: Mutex::new(HashMap::new()),
-            decoration: None,
-            structures: None,
-            manual_structures: std::sync::OnceLock::new(),
-            spawn_target,
-            old_world: std::sync::OnceLock::new(),
-            debug_density,
-            spawn_position: std::sync::OnceLock::new(),
-            flat: None,
-            dimension: "minecraft:overworld".to_owned(),
-        };
-        pipeline.decoration = pipeline
-            .data
-            .decoration_for(&source_json, &pipeline.source)?;
-        if with_structures {
-            let possible = pipeline
-                .source
-                .possible_biomes()
-                .into_iter()
-                .filter_map(|name| pipeline.data.biome_id(name))
-                .collect();
-            let rings = pipeline.data.rings_for(seed, generator);
-            pipeline.structures =
-                super::generator_structures::StructureState::new(&pipeline.data, &possible, rings)?;
-            if let Some(state) = pipeline.structures.as_mut() {
-                state.fixed_biome = generator["biome_source"]["type"] == "minecraft:fixed";
-            }
-            // ChunkGenerator.createState reads getOrigin: a noise generator
-            // answers the chunk of its NoiseSpawnFinder position, others
-            // chunk 0 0. Only a dimension-origin structure set reads it.
-            if pipeline
-                .structures
-                .as_ref()
-                .is_some_and(|state| state.needs_dimension_origin())
-                && let Ok([x, z]) = pipeline.spawn_column()
-            {
-                let origin = ChunkPos::new(x >> 4, z >> 4);
-                if let Some(state) = pipeline.structures.as_mut() {
-                    state.set_dimension_origin(origin);
-                }
-            }
-        }
-        Ok(pipeline)
-    }
     /// The pipeline of the dimension `dimension` (the Overworld by default).
     fn in_dimension(mut self, dimension: &str) -> Self {
         dimension.clone_into(&mut self.dimension);
@@ -1506,7 +1282,7 @@ where
     /// with the state it already has. Check their imported material flags too.
     /// Noise filling already built the WG maps; these writes add no fluid marks.
     fn identity_end_surface(&self, pos: ChunkPos) -> bool {
-        if !matches!(self.source, ResolvedBiomeSource::End(_))
+        if !self.source.is_end()
             // At wrapped block coordinates the ordinary biome-region lookup
             // can fail; retain that lookup and its error outside this range.
             || ![pos.x, pos.z].into_iter().all(|c| {
@@ -3637,7 +3413,7 @@ impl OverworldGenerator {
         dimension: &str,
         with_structures: bool,
         saved_stem: Option<&Value>,
-    ) -> Result<Self, GeneratorError> {
+    ) -> Result<OverworldGenerator, GeneratorError> {
         let stem = if let Some(json) = data.dimensions.get(dimension) {
             serde_json::from_str(json)?
         } else if let Some(stem) = saved_stem {
@@ -4528,6 +4304,94 @@ mod tests {
             crate::level::data::load_registry(&root).expect("registry"),
         ));
         Some(GeneratorData::load(&root.join("worldgen"), registry).expect("worldgen data"))
+    }
+
+    #[test]
+    #[ignore = "requires the player's prepared 26.3 resources via HORIZON_RESOURCES"]
+    fn external_decoders_do_not_alias_preloaded_decoration_or_retain_worlds() {
+        use super::super::external_feature::{ExternalFeature, ExternalFeatureDecoder};
+        #[derive(Debug)]
+        struct Decoder;
+        impl ExternalFeatureDecoder for Decoder {
+            fn decode(
+                &self,
+                _: &str,
+                _: &str,
+                _: &super::super::block_feature::FeatureBlockBindings<'_>,
+            ) -> Option<Result<Arc<dyn ExternalFeature>, super::super::DecodeError>> {
+                None
+            }
+        }
+        let data = prepared_data().expect("prepared resource input required");
+        let normal: Value = serde_json::from_str(&data.world_presets["minecraft:normal"]).unwrap();
+        let generator = &normal["dimensions"]["minecraft:overworld"]["generator"];
+        let settings: Value =
+            serde_json::from_str(&data.settings[generator["settings"].as_str().unwrap()]).unwrap();
+        let baseline = Pipeline::new(
+            data.clone(),
+            1,
+            XoroshiroRandom::new(1),
+            generator,
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        let decoder = Arc::new(Decoder);
+        let first_owner = Arc::downgrade(&decoder);
+        let first = Pipeline::new_with_extensions(
+            data.clone(),
+            1,
+            XoroshiroRandom::new(1),
+            generator,
+            &settings,
+            false,
+            None,
+            None,
+            Some(decoder),
+        )
+        .unwrap();
+        let decoder = Arc::new(Decoder);
+        let second_owner = Arc::downgrade(&decoder);
+        let second = Pipeline::new_with_extensions(
+            data.clone(),
+            2,
+            XoroshiroRandom::new(2),
+            generator,
+            &settings,
+            false,
+            None,
+            None,
+            Some(decoder),
+        )
+        .unwrap();
+        assert!(!Arc::ptr_eq(
+            first.decoration.as_ref().unwrap(),
+            baseline.decoration.as_ref().unwrap()
+        ));
+        assert!(!Arc::ptr_eq(
+            first.decoration.as_ref().unwrap(),
+            second.decoration.as_ref().unwrap()
+        ));
+        drop(first);
+        assert!(first_owner.upgrade().is_none());
+        assert!(second_owner.upgrade().is_some());
+        drop(second);
+        assert!(second_owner.upgrade().is_none());
+        let after = Pipeline::new(
+            data,
+            3,
+            XoroshiroRandom::new(3),
+            generator,
+            &settings,
+            false,
+            None,
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(
+            after.decoration.as_ref().unwrap(),
+            baseline.decoration.as_ref().unwrap()
+        ));
     }
 
     /// A superflat world decorates with what `adjustGenerationSettings` keeps of its biome

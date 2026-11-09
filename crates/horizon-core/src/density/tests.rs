@@ -2,6 +2,53 @@ use super::*;
 use crate::{noise::PerlinNoise, random::LegacyRandom};
 
 #[test]
+fn bound_sampler_failure_propagates_through_scalar_bulk_and_compiled_graph() {
+    #[derive(Debug)]
+    struct ExternalInput;
+    impl DensitySampler for ExternalInput {
+        fn sample_value(
+            &self,
+            _: &mut SamplerContext,
+            position: [i32; 3],
+        ) -> Result<f32, SampleError> {
+            if position[1] == 2 {
+                Err(SampleError::External("controlled external source failure"))
+            } else {
+                Ok(position[1] as f32)
+            }
+        }
+    }
+    use graph::{DensityCompiler, DensityGraph, GraphBinary, GraphNode};
+    let error = SampleError::External("controlled external source failure");
+    let mut graph = DensityGraph::new();
+    let external = graph
+        .bind(Arc::new(ExternalInput), Interval::INFINITE, 7)
+        .unwrap();
+    let one = graph.insert(GraphNode::Constant(1.0)).unwrap();
+    let root = graph
+        .insert(GraphNode::Binary {
+            kind: GraphBinary::Add,
+            left: external,
+            right: one,
+        })
+        .unwrap();
+    let sampler = DensityCompiler::new(graph).get_sampler(root).unwrap();
+    let mut context = SamplerContext::cached();
+    assert_eq!(sampler.sample_value(&mut context, [0, 2, 0]), Err(error));
+    let volume = DensityVolume::new([1, 4, 1], [0, 0, 0], [1, 1, 1]).unwrap();
+    assert_eq!(
+        sampler.sample_volume(&mut context, &mut [17.0; 4], volume),
+        Err(error)
+    );
+    context.reset();
+    assert_eq!(sampler.sample_value(&mut context, [0, 0, 0]), Ok(1.0));
+    assert_eq!(
+        error.to_string(),
+        "external density sampler failed: controlled external source failure"
+    );
+}
+
+#[test]
 fn tail_writes_follow_the_selected_bulk_sampler() {
     let mut context = SamplerContext::default();
     let volume = DensityVolume::new([2, 3, 2], [-3, -4, -5], [1, 2, 1]).unwrap();

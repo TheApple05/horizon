@@ -32,6 +32,7 @@ pub mod dripstone;
 pub mod end_gateway;
 pub mod end_podium;
 pub mod end_spike;
+pub mod external_feature;
 pub mod feature;
 pub mod feature_catalog;
 pub mod feature_graph;

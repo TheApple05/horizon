@@ -81,6 +81,7 @@ pub(super) fn integer_properties(registry: &BlockRegistry) -> BTreeSet<(String, 
 
 pub struct FeatureBlockBindings<'r> {
     registry: &'r BlockRegistry,
+    pub(crate) external_decoder: Option<Arc<dyn super::external_feature::ExternalFeatureDecoder>>,
     pub(crate) simple_blocks: Option<(
         super::state_provider::StateProviderBindings<'r>,
         super::state_provider::StateProviderCatalog,
@@ -99,6 +100,13 @@ pub struct FeatureBlockBindings<'r> {
     pub(crate) structures: Option<Arc<super::structure::StructureResources>>,
 }
 impl<'r> FeatureBlockBindings<'r> {
+    pub fn with_external_decoder(
+        mut self,
+        decoder: Arc<dyn super::external_feature::ExternalFeatureDecoder>,
+    ) -> Self {
+        self.external_decoder = Some(decoder);
+        self
+    }
     /// Shared tree/vegetation classifications, built on first use. Requires
     /// state-provider and block-property bindings.
     /// Bind structure templates and processor lists for template features.
@@ -258,6 +266,7 @@ impl<'r> FeatureBlockBindings<'r> {
         };
         Ok(Self {
             registry,
+            external_decoder: None,
             simple_blocks: None,
             codec,
             biomes: None,
