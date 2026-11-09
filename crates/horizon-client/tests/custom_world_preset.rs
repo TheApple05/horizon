@@ -249,6 +249,58 @@ fn a_registered_preset_cycles_writes_and_reopens_without_changing_vanilla() {
     save::write_world_gen_settings(&other, 17, WorldGen::default()).unwrap();
     assert_eq!(WorldGen::read(&other).unwrap().preset, WorldPreset::Normal);
     assert_eq!(std::fs::read(&file).unwrap(), stable_bytes);
+    use horizon_client_lib::title::{Mode, Title, WorldOptions};
+    let size = (640.0, 360.0);
+    let mut title = Title::new(work.join("ui-saves"), &work);
+    title.mode = Mode::Create {
+        name: "Custom test".into(),
+        seed: "9".into(),
+        creative: false,
+        focus: 2,
+        options: WorldOptions {
+            tab: 1,
+            world_type: custom,
+            ..Default::default()
+        },
+    };
+    title.click(400.0, 65.0, size);
+    assert!(matches!(&title.mode, Mode::CreateCustom { state, .. } if state.value["scale"]==1));
+    title.tab_dir(false, size);
+    title.arrow_key(winit::keyboard::KeyCode::ArrowRight, size, false);
+    assert!(matches!(&title.mode, Mode::CreateCustom { state, .. } if state.value["scale"]==2));
+    title.escape();
+    assert!(
+        matches!(&title.mode, Mode::Create { options, .. } if options.custom_overworld.is_none())
+    );
+    title.click(400.0, 65.0, size);
+    title.tab_dir(false, size);
+    title.arrow_key(winit::keyboard::KeyCode::ArrowRight, size, false);
+    title.arrow_key(winit::keyboard::KeyCode::ArrowRight, size, false);
+    title.click(240.0, 343.0, size);
+    let Mode::Create { options, .. } = &title.mode else {
+        panic!("Done must return to creation")
+    };
+    assert_eq!(
+        custom_settings(options.custom_overworld.as_ref().unwrap()).unwrap(),
+        Some(serde_json::json!({"scale":3}))
+    );
+    title.click(400.0, 65.0, size);
+    assert!(matches!(&title.mode, Mode::CreateCustom { state, .. } if state.value["scale"]==3));
+    title.click(320.0, 319.0, size);
+    assert!(matches!(&title.mode, Mode::CreateCustom { state, .. } if state.value["scale"]==1));
+    title.click(400.0, 343.0, size);
+    let Mode::Create { options, .. } = &title.mode else {
+        panic!("Cancel must return to creation")
+    };
+    assert_eq!(
+        custom_settings(options.custom_overworld.as_ref().unwrap()).unwrap(),
+        Some(serde_json::json!({"scale":3}))
+    );
+    title.click(400.0, 65.0, size);
+    title.click(310.0, 52.0, size);
+    title.release();
+    assert!(matches!(&title.mode, Mode::CreateCustom { state, .. } if state.value["scale"]==4));
+    title.escape();
     custom_presets::register(CustomPreset {
         id: "example:greedy",
         label: "Greedy recognizer",
