@@ -37,6 +37,8 @@ pub struct WorldOptions {
     pub single_biome: String,
     /// CreateFlatWorldScreen's layers and biome, kept with the world type.
     pub flat_settings: Option<super::flat::FlatSettings>,
+    /// A complete world-local stem; Re-Create retains it without replacing invalid settings.
+    pub custom_overworld: Option<horizon_world::nbt::Tag>,
     pub structures: bool,
     pub bonus_chest: bool,
     /// `getGameRules`: the Game Rules screen's values, saved with the world.
@@ -57,6 +59,7 @@ impl Default for WorldOptions {
             world_type: crate::save::WorldPreset::Normal,
             single_biome: "minecraft:plains".into(),
             flat_settings: None,
+            custom_overworld: None,
             structures: true,
             bonus_chest: false,
             rules: crate::gamerules::GameRules::default(),
@@ -98,6 +101,14 @@ impl WorldOptions {
             single_biome: fixed_biome(dir).unwrap_or_else(|| "minecraft:plains".into()),
             flat_settings: (generation.preset == crate::save::WorldPreset::Flat)
                 .then(|| super::flat::FlatSettings::from_world(dir))
+                .flatten(),
+            custom_overworld: matches!(generation.preset, crate::save::WorldPreset::Custom(_))
+                .then(|| {
+                    crate::save::world_gen_settings(dir)?
+                        .get("dimensions")?
+                        .get("minecraft:overworld")
+                        .cloned()
+                })
                 .flatten(),
             structures: generation.structures,
             bonus_chest: generation.bonus_chest,
@@ -200,6 +211,20 @@ impl WorldOptions {
         self.flat_settings
             .as_ref()
             .map(super::flat::FlatSettings::to_tag)
+    }
+
+    pub fn custom_overworld(&self) -> Option<horizon_world::nbt::Tag> {
+        let crate::save::WorldPreset::Custom(preset) = self.world_type else {
+            return None;
+        };
+        self.custom_overworld
+            .as_ref()
+            .filter(|stem| {
+                stem.get("generator")
+                    .and_then(crate::save::custom_presets::recognize)
+                    == Some(preset)
+            })
+            .cloned()
     }
     /// A press on one of the open tab's cycle buttons or switches.
     pub(super) fn press(&mut self, id: u8, creative: &mut bool) {

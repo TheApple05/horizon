@@ -5355,3 +5355,31 @@ particles or entity effects. The pending fragment assigns its API number at merg
 ### Advancement displays
 
 The pending `advancement_display` helper (`host.advancement_display`) returns an `AdvancementDisplay` for an advancement id in the loaded tree: `title` and `description` as `Text` (the components as the datapack wrote them), `frame` as `task`, `goal` or `challenge`, `announce_to_chat` and `hidden`. It is None for an unknown id or one without a display. The helper loads the tree on first use, so it is for server-side reads, not hot paths. The pending fragment assigns its API number at merge (`@API:advancement_display@`).
+
+
+
+# Native world presets
+
+A native module can register a `horizon_client_lib::save::custom_presets::CustomPreset`
+once, before reading the world-type catalog. Its static namespaced ID and
+translation key appear after the five built-in choices, in registration order.
+The built-in `WorldPreset::ALL` stays unchanged; `WorldPreset::all()`, the
+create-world button's next/previous actions and ID lookup include registrations.
+The catalog accepts at most 64 entries and rejects duplicate IDs, the
+`minecraft` namespace, malformed identifiers and empty/oversized labels.
+
+The `overworld` callback returns the complete overworld level stem as an NBT
+`Tag`. The regular save writer preserves the chosen seed and generation flags,
+with the ordinary Nether and End stems. A callback failure or malformed stem
+returns an error before writing the settings file. The `recognizes` callback
+receives a saved overworld generator and lets the create/recreate flow recover
+the custom choice. Recognizers must identify their own generators narrowly;
+built-in flat, debug, large-biomes, amplified and fixed-biome recognition keeps
+priority. Both callbacks run outside the catalog lock, so reading metadata from
+a callback is safe.
+
+Registration stores only static metadata and function pointers. World owners,
+generator state and caches belong to the constructed world. Supplying the stem
+does not implement a generator: a native mod must also handle its own world
+constructor and resource integration. This API does not change vanilla choices
+when no custom preset is registered.
