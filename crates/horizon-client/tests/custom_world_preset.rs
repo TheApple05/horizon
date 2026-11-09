@@ -1,6 +1,6 @@
 use horizon_client_lib::save::{
     self, WorldGen, WorldPreset,
-    custom_presets::{self, CustomPreset},
+    custom_presets::{self, CustomPreset, CustomPresetEditor, PresetSetting, SettingKind},
 };
 use horizon_world::nbt::Tag;
 
@@ -24,6 +24,35 @@ fn stem() -> Result<Tag, String> {
 fn recognizes(generator: &Tag) -> bool {
     assert!(custom_presets::by_id("example:terrain").is_some());
     generator.get("settings") == Some(&string("example:terrain_settings"))
+}
+
+fn custom_stem(value: &serde_json::Value) -> Result<Tag, String> {
+    if !value["scale"]
+        .as_i64()
+        .is_some_and(|n| (1..=4).contains(&n))
+    {
+        return Err("scale must be an integer in 1..4".into());
+    }
+    let mut stem = stem()?;
+    let Some(Tag::Compound(generator)) = stem.get_mut("generator") else {
+        unreachable!()
+    };
+    generator.insert("example:settings".into(), string(&value.to_string()));
+    Ok(stem)
+}
+fn custom_settings(stem: &Tag) -> Result<Option<serde_json::Value>, String> {
+    match stem
+        .get("generator")
+        .and_then(|g| g.get("example:settings"))
+    {
+        None => Ok(None),
+        Some(Tag::String(text)) => {
+            serde_json::from_str(&text.to_string().map_err(|e| e.to_string())?)
+                .map(Some)
+                .map_err(|e| e.to_string())
+        }
+        _ => Err("settings must be a string".into()),
+    }
 }
 
 /// This integration target has its own process/catalog, isolated from the
@@ -136,6 +165,90 @@ fn a_registered_preset_cycles_writes_and_reopens_without_changing_vanilla() {
         .is_err()
     );
     assert_eq!(std::fs::read(&file).unwrap(), before);
+    custom_presets::register_editor(
+        registered,
+        CustomPresetEditor {
+            fields: || {
+                vec![PresetSetting {
+                    path: "/scale",
+                    label: "example.scale",
+                    kind: SettingKind::Number {
+                        min: 1.0,
+                        max: 4.0,
+                        step: 1.0,
+                        integer: true,
+                    },
+                }]
+            },
+            defaults: || Ok(serde_json::json!({"scale":1})),
+            overworld: custom_stem,
+            settings: custom_settings,
+        },
+    )
+    .unwrap();
+    let settings = serde_json::json!({"scale":3});
+    let configured = custom_presets::generate_custom(registered, &settings).unwrap();
+    save::write_world_gen_settings_customized(
+        &work,
+        8675309,
+        WorldGen {
+            preset: custom,
+            ..WorldGen::default()
+        },
+        None,
+        None,
+        Some(configured.clone()),
+    )
+    .unwrap();
+    let saved = save::world_gen_settings(&work).unwrap();
+    let reopened = saved
+        .get("dimensions")
+        .unwrap()
+        .get("minecraft:overworld")
+        .unwrap();
+    assert_eq!(custom_settings(reopened).unwrap(), Some(settings));
+    assert_eq!(WorldGen::read(&work).unwrap().preset, custom);
+    let mut options = horizon_client_lib::title::WorldOptions {
+        world_type: custom,
+        custom_overworld: Some(configured.clone()),
+        ..Default::default()
+    };
+    assert_eq!(options.custom_overworld(), Some(configured));
+    options.world_type = WorldPreset::Normal;
+    assert!(options.custom_overworld().is_none());
+    let stable_bytes = std::fs::read(&file).unwrap();
+    let mut broken = reopened.clone();
+    let Some(Tag::Compound(generator)) = broken.get_mut("generator") else {
+        unreachable!()
+    };
+    generator.insert("example:settings".into(), string("{"));
+    assert!(
+        save::write_world_gen_settings_customized(
+            &work,
+            1,
+            WorldGen {
+                preset: custom,
+                ..WorldGen::default()
+            },
+            None,
+            None,
+            Some(broken)
+        )
+        .is_err()
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), stable_bytes);
+    assert!(custom_presets::generate_custom(registered, &serde_json::json!({"scale":99})).is_err());
+    assert!(
+        custom_presets::generate_custom(
+            registered,
+            &serde_json::json!({"scale":3,"large":"x".repeat(60*1024)})
+        )
+        .is_err()
+    );
+    let other = work.join("other");
+    save::write_world_gen_settings(&other, 17, WorldGen::default()).unwrap();
+    assert_eq!(WorldGen::read(&other).unwrap().preset, WorldPreset::Normal);
+    assert_eq!(std::fs::read(&file).unwrap(), stable_bytes);
     custom_presets::register(CustomPreset {
         id: "example:greedy",
         label: "Greedy recognizer",

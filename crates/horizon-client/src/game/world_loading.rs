@@ -170,12 +170,13 @@ impl WorldRequest {
             level.hardcore = o.hardcore;
             level.difficulty = horizon_client::title::DIFFICULTIES[o.difficulty()].into();
             level.allow_commands = Some(o.commands(creative));
-            horizon_client::save::write_world_gen_settings_with(
+            horizon_client::save::write_world_gen_settings_customized(
                 &save_root,
                 level.seed,
                 o.world_gen(),
                 o.flat_settings(),
                 o.single_biome(),
+                o.custom_overworld(),
             )?;
             // The DataPackConfig the screen chose: the picked packs on,
             // everything else disabled — the feature packs left out, and the

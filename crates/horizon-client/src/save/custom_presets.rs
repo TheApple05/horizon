@@ -1,6 +1,7 @@
 //! Bounded process-lifetime metadata for native custom world presets.
 //! Entries contain static identifiers and function pointers, never world owners.
 use horizon_world::nbt::Tag;
+use serde_json::Value;
 use std::sync::{Mutex, OnceLock};
 
 const MAX_ENTRIES: usize = 64;
@@ -30,9 +31,38 @@ pub struct CustomPreset {
     pub recognizes: fn(&Tag) -> bool,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum SettingKind {
+    Number {
+        min: f64,
+        max: f64,
+        step: f64,
+        integer: bool,
+    },
+    Boolean,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PresetSetting {
+    pub path: &'static str,
+    pub label: &'static str,
+    pub kind: SettingKind,
+}
+
+/// Optional editor callbacks; existing CustomPreset registrations stay compatible.
+#[derive(Clone, Copy, Debug)]
+pub struct CustomPresetEditor {
+    pub fields: fn() -> Vec<PresetSetting>,
+    pub defaults: fn() -> Result<Value, String>,
+    pub overworld: fn(&Value) -> Result<Tag, String>,
+    /// None denotes the original uncustomized stem; malformed settings return Err.
+    pub settings: fn(&Tag) -> Result<Option<Value>, String>,
+}
+
 #[derive(Default)]
 struct Catalog {
     entries: Vec<CustomPreset>,
+    editors: Vec<(RegisteredPreset, CustomPresetEditor)>,
 }
 
 fn valid_identifier(id: &str) -> Result<(), String> {
@@ -155,6 +185,86 @@ pub fn by_id(id: &str) -> Option<RegisteredPreset> {
     lock_catalog().by_id(id)
 }
 
+pub fn register_editor(preset: RegisteredPreset, editor: CustomPresetEditor) -> Result<(), String> {
+    let fields = (editor.fields)();
+    if fields.is_empty() || fields.len() > 64 {
+        return Err("custom preset editor must expose 1..64 settings".into());
+    }
+    for (i, field) in fields.iter().enumerate() {
+        if !field.path.starts_with('/')
+            || field.path.len() > 256
+            || field.label.is_empty()
+            || field.label.len() > MAX_LABEL_BYTES
+            || fields[..i].iter().any(|f| f.path == field.path)
+        {
+            return Err("invalid or duplicate custom preset editor field".into());
+        }
+        if let SettingKind::Number {
+            min,
+            max,
+            step,
+            integer,
+        } = field.kind
+            && (!min.is_finite()
+                || !max.is_finite()
+                || !step.is_finite()
+                || min >= max
+                || step <= 0.0
+                || (integer && [min, max, step].iter().any(|v| v.fract() != 0.0)))
+        {
+            return Err("invalid custom preset editor numeric range".into());
+        }
+    }
+    let mut guard = lock_catalog();
+    if guard.definition(preset).is_none() || guard.editors.iter().any(|(p, _)| *p == preset) {
+        return Err("custom preset editor requires a registered preset without an editor".into());
+    }
+    guard.editors.push((preset, editor));
+    Ok(())
+}
+
+pub fn editor(preset: RegisteredPreset) -> Option<CustomPresetEditor> {
+    lock_catalog()
+        .editors
+        .iter()
+        .find(|(p, _)| *p == preset)
+        .map(|(_, e)| *e)
+}
+
+fn check_settings(value: &Value) -> Result<(), String> {
+    if !value.is_object() || value.to_string().len() > 60 * 1024 {
+        return Err("custom preset settings must be an object of at most 60 KiB".into());
+    }
+    Ok(())
+}
+
+pub fn generate_custom(preset: RegisteredPreset, value: &Value) -> Result<Tag, String> {
+    check_settings(value)?;
+    let editor = editor(preset).ok_or("custom preset has no editor")?;
+    let stem = validate_stem(preset, (editor.overworld)(value)?)?;
+    if recognize(stem.get("generator").ok_or("custom generator missing")?) != Some(preset)
+        || (editor.settings)(&stem)?.as_ref() != Some(value)
+    {
+        return Err(
+            "custom preset editor did not preserve its settings and preset identity".into(),
+        );
+    }
+    Ok(stem)
+}
+
+pub fn validate_custom_stem(preset: RegisteredPreset, stem: Tag) -> Result<Tag, String> {
+    let stem = validate_stem(preset, stem)?;
+    if recognize(stem.get("generator").ok_or("custom generator missing")?) != Some(preset) {
+        return Err("custom world stem belongs to another preset".into());
+    }
+    if let Some(editor) = editor(preset)
+        && let Some(value) = (editor.settings)(&stem)?
+    {
+        return generate_custom(preset, &value);
+    }
+    Ok(stem)
+}
+
 pub fn generate(preset: RegisteredPreset) -> Result<Tag, String> {
     let generator = {
         let guard = lock_catalog();
@@ -163,8 +273,14 @@ pub fn generate(preset: RegisteredPreset) -> Result<Tag, String> {
             None => return Err(format!("preset {:?}: not registered in catalog", preset.id)),
         }
     };
-    let stem = generator()
-        .map_err(|err| format!("preset {:?}: overworld generation failed: {err}", preset.id))?;
+    validate_stem(
+        preset,
+        generator()
+            .map_err(|err| format!("preset {:?}: overworld generation failed: {err}", preset.id))?,
+    )
+}
+
+fn validate_stem(preset: RegisteredPreset, stem: Tag) -> Result<Tag, String> {
     if !matches!(stem.get("type"), Some(Tag::String(_) | Tag::Compound(_)))
         || !matches!(
             stem.get("generator").and_then(|g| g.get("type")),
