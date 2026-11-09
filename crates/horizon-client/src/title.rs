@@ -18,6 +18,7 @@ use std::{
 mod buffet;
 mod confirm_experiments;
 mod create_world;
+mod custom_preset;
 mod experiments;
 mod flat;
 mod onboarding;
@@ -357,6 +358,10 @@ pub enum Mode {
         focus: u8,
         options: WorldOptions,
         buffet: buffet::State,
+    },
+    CreateCustom {
+        return_to: Box<Mode>,
+        state: custom_preset::State,
     },
     /// AccessibilityOnboardingScreen: the first screen of a first launch.
     Onboarding(Onboarding),
@@ -714,6 +719,7 @@ impl Mode {
             Self::Create { .. } => "world_create",
             Self::CreateFlat { .. } => "world_create_flat",
             Self::CreateBuffet { .. } => "world_create_buffet",
+            Self::CreateCustom { .. } => "world_create_custom",
             Self::Edit { .. } => "world_edit",
             Self::Backup { .. } => "world_backup",
             Self::BackupBeforeUpgrade { .. } => "world_backup_confirm",
@@ -1113,6 +1119,10 @@ impl Title {
     }
     /// The pointer moved with the button held (`mouseDragged`).
     pub fn drag(&mut self, cursor: (f32, f32), size: (f32, f32)) {
+        if let Mode::CreateCustom { state, .. } = &mut self.mode {
+            state.drag(cursor, size);
+            return;
+        }
         if let Some(rules) = self.rules.get_mut() {
             return rules.drag(cursor.1, size.1.ceil());
         }
@@ -1136,6 +1146,9 @@ impl Title {
     }
     /// The button was released (`onRelease`).
     pub fn release(&mut self) {
+        if let Mode::CreateCustom { state, .. } = &mut self.mode {
+            state.release();
+        }
         if let Some(rules) = self.rules.get_mut() {
             rules.release();
         }
@@ -1858,6 +1871,7 @@ impl Title {
             } => create_world::buttons(w, h, *creative, options),
             Mode::CreateFlat { flat, .. } => flat::buttons(w, h, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::buttons(w, h, buffet),
+            Mode::CreateCustom { state, .. } => custom_preset::buttons(w, h, state),
             Mode::Edit { world, name, .. } => {
                 let x = (w / 2.0).floor() - 100.0;
                 let top = edit_top(h);
@@ -2217,6 +2231,14 @@ impl Title {
                     "createWorld.customize.buffet.title",
                     "Single Biome Customization",
                 ),
+            ),
+            Mode::CreateCustom { state, .. } => ScreenInfo::new(
+                "create_world/custom",
+                Text::translate(
+                    "horizon.customize.title",
+                    &[Text::translate(state.preset.label(), &[])],
+                )
+                .plain(),
             ),
             Mode::Edit { .. } => {
                 ScreenInfo::new("edit_world", get("selectWorld.edit.title", "Edit World"))
@@ -2703,6 +2725,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             } => self.draw_create(atlas, batch, cursor, name, seed, *focus, options),
             Mode::CreateFlat { flat, .. } => flat::draw(self, atlas, items, batch, cursor, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::draw(self, atlas, batch, cursor, buffet),
+            Mode::CreateCustom { state, .. } => custom_preset::draw(atlas, batch, state),
             Mode::Edit { name, focused, .. } => {
                 crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
                 centered(
@@ -3146,6 +3169,11 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             ),
         }
         for b in self.buttons(w, h) {
+            if let Mode::CreateCustom { state, .. } = &self.mode
+                && custom_preset::draw_slider(self, atlas, batch, cursor, state, &b)
+            {
+                continue;
+            }
             crate::widgets::record(&b.label, [b.x, b.y, b.w, 20.0], b.enabled);
             let inside =
                 cursor.0 >= b.x && cursor.0 < b.x + b.w && cursor.1 >= b.y && cursor.1 < b.y + 20.0;
@@ -3412,6 +3440,10 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         ) {
             // A press on a text field takes the focus from the button.
             self.focused_button = None;
+        }
+        if matches!(self.mode, Mode::CreateCustom { .. }) {
+            self.custom_preset_click(hit, Some(x), (w, h));
+            return (Action::None, hit.is_some());
         }
         if matches!(self.mode, Mode::CreateBuffet { .. }) {
             self.buffet_click(x, y, (w, h), hit);
@@ -3775,6 +3807,12 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 };
                 Action::None
             }
+            (Mode::Create { options, .. }, Some(26))
+                if matches!(options.world_type, crate::save::WorldPreset::Custom(_)) =>
+            {
+                self.open_custom_preset();
+                Action::None
+            }
             // CreateFlatWorldScreen for the flat preset.
             (
                 Mode::Create {
@@ -4003,6 +4041,15 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// `confirm_key` with actual viewport size for button geometry lookup.
     /// Returns the triggered action and whether a UI button click sound should play.
     pub fn confirm_key_size(&mut self, size: (f32, f32)) -> (Action, bool) {
+        if matches!(self.mode, Mode::CreateCustom { .. }) {
+            let hit = self.focused_button.filter(|id| {
+                self.buttons(size.0, size.1)
+                    .iter()
+                    .any(|b| b.id == *id && b.enabled)
+            });
+            self.custom_preset_click(hit, None, size);
+            return (Action::None, hit.is_some());
+        }
         self.remember_direct_address();
         if self.rules.get_mut().is_some() {
             return (Action::None, false);
@@ -4214,6 +4261,16 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// 2D spatial arrow key navigation across enabled buttons.
     pub fn arrow_key(&mut self, key: winit::keyboard::KeyCode, size: (f32, f32), shift: bool) {
         use winit::keyboard::KeyCode;
+        if matches!(key, KeyCode::ArrowLeft | KeyCode::ArrowRight)
+            && let (Mode::CreateCustom { state, .. }, Some(id)) =
+                (&mut self.mode, self.focused_button)
+            && custom_preset::buttons(size.0, size.1, state)
+                .iter()
+                .any(|b| b.id == id)
+            && state.adjust(id, if key == KeyCode::ArrowLeft { -1.0 } else { 1.0 })
+        {
+            return;
+        }
         if self.rules.get_mut().is_some() {
             return;
         }
@@ -4614,6 +4671,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 }
             }
             Mode::CreateBuffet { .. } => self.close_buffet(false),
+            Mode::CreateCustom { .. } => self.close_custom_preset(false),
             Mode::Create { .. } => self.cancel_create(),
             // Screen.keyPressed: Escape closes the screen, which fades out.
             Mode::Onboarding(_) => self.onboarding_close(),
