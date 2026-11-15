@@ -70,6 +70,8 @@ pub mod keypad;
 pub mod terrain_model;
 pub use horizon_polytone::creative_tabs as polytone_creative_tabs;
 pub use horizon_world::json_folder;
+#[cfg(test)]
+mod lang_key_tests;
 pub mod level_loading;
 pub mod light;
 pub mod lod;
