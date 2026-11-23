@@ -141,8 +141,7 @@ pub trait DimensionsRegistrar {
              type, only name one a native mod registered in its density JSON"
         );
     }
-    // Private registration transport. The native-only API helper calls this
-    // method; the wire generator leaves the default in native guest builds.
+    // hidden: native registration plumbing behind the public helper. Native guests use the default.
     #[doc(hidden)]
     #[cfg(not(target_arch = "wasm32"))]
     fn add_biome_mapper_type(&mut self, name: &str, _mapper_type: Arc<dyn crate::BiomeMapperType>) {

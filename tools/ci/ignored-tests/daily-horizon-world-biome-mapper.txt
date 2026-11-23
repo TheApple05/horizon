@@ -1,0 +1,1 @@
+horizon-world registered_biome_source::biome_mapper_reads_each_saved_stem_in_real_chunk_generation test:it daily resources

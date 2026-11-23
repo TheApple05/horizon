@@ -225,7 +225,7 @@ fn configured_mapper_preserves_parent_and_uses_prepared_climate() {
 }
 
 #[test]
-#[ignore = "needs prepared 26.3 resources"]
+#[ignore = "daily"]
 fn biome_mapper_reads_each_saved_stem_in_real_chunk_generation() {
     use horizon_core::position::ChunkPos;
     use horizon_world::{
