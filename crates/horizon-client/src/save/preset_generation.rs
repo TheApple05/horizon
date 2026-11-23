@@ -95,12 +95,12 @@ pub(crate) fn write_world_gen_settings_for_preset(
     write_saved_data(dir, "world_gen_settings", settings)
 }
 
-pub(crate) fn read_saved_preset(dir: &Path) -> Option<(String, Tag)> {
+pub(crate) fn read_saved_preset(dir: &Path) -> Option<(Option<String>, Tag)> {
     let settings = world_gen_settings(dir)?;
-    let preset = text(settings.get("horizon:world_preset"))?;
+    let preset = text(settings.get("horizon:world_preset"))
+        .filter(|id| horizon_core::level_id::valid_level_id(id));
     let dimensions = settings.get("dimensions")?;
-    (horizon_core::level_id::valid_level_id(&preset) && valid_world_gen_dimensions(dimensions))
-        .then(|| (preset, dimensions.clone()))
+    valid_world_gen_dimensions(dimensions).then(|| (preset, dimensions.clone()))
 }
 /// Build the vanilla preset's creation settings without touching disk.
 pub(crate) fn new_world_gen_settings(

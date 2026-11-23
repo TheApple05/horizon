@@ -118,6 +118,18 @@ fn recreate_builtin_preset_for_edit(f: &mut Fixture, preset: crate::save::WorldP
             unreachable!()
         };
         generator.insert("settings".into(), Tag::String("example:overworld".into()));
+    } else if preset == crate::save::WorldPreset::Flat {
+        let Tag::Compound(settings) = dimensions
+            .get_mut("minecraft:overworld")
+            .unwrap()
+            .get_mut("generator")
+            .unwrap()
+            .get_mut("settings")
+            .unwrap()
+        else {
+            unreachable!()
+        };
+        settings.remove(&"structure_overrides".into());
     }
     crate::save::write_world_gen_settings_for_preset(
         &f.title.saves.join("Source"),
@@ -150,7 +162,7 @@ fn save_recreated_builtin_preset(f: &mut Fixture, original: &Tag) -> Tag {
     let dir = f.root.join("recreated");
     options.write_world_gen(&dir, 123456).unwrap();
     let (preset, dimensions) = crate::save::read_saved_preset(&dir).unwrap();
-    assert_eq!(preset, options.preset_id());
+    assert_eq!(preset.as_deref(), Some(options.preset_id()));
     for level in ["minecraft:the_nether", "minecraft:the_end", "example:moon"] {
         assert_eq!(dimensions.get(level), original.get(level));
     }
@@ -158,7 +170,7 @@ fn save_recreated_builtin_preset(f: &mut Fixture, original: &Tag) -> Tag {
 }
 
 #[test]
-fn recreating_an_edited_flat_preset_saves_new_layers() {
+fn recreating_an_edited_flat_preset_saves_new_layers_and_keeps_implicit_structures() {
     let mut f = Fixture::new();
     let original = recreate_builtin_preset_for_edit(&mut f, crate::save::WorldPreset::Flat);
     assert!(matches!(f.title.mode, Mode::CreateFlat { .. }));
@@ -167,6 +179,7 @@ fn recreating_an_edited_flat_preset_saves_new_layers() {
     let settings = save_recreated_builtin_preset(&mut f, &original);
     let mut expected = flat::FlatSettings::default();
     expected.layers.pop();
+    expected.structure_overrides = None;
     assert_eq!(
         settings.get("generator").and_then(|g| g.get("settings")),
         Some(&expected.to_tag())
@@ -200,6 +213,134 @@ fn recreating_an_edited_single_biome_preset_saves_the_new_biome() {
         crate::save::text(generator.get("settings")),
         Some("example:overworld".into())
     );
+}
+
+#[test]
+fn recreating_a_hidden_preset_keeps_saved_stems_until_the_world_type_changes() {
+    let mut f = Fixture::new();
+    let pack = f.root.join("pack");
+    let presets = pack.join("data/example/worldgen/world_preset");
+    let tags = pack.join("data/minecraft/tags/worldgen/world_preset");
+    fs::create_dir_all(&presets).unwrap();
+    fs::create_dir_all(&tags).unwrap();
+    fs::write(
+        presets.join("hidden.json"),
+        r#"{"dimensions":{"minecraft:overworld":{"type":"minecraft:overworld","generator":{"type":"minecraft:debug"}}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        tags.join("normal.json"),
+        r#"{"replace":true,"values":["minecraft:normal","minecraft:flat"]}"#,
+    )
+    .unwrap();
+    f.title
+        .set_preset_data_source(crate::resource_source::ResourceSource::directory(pack));
+    let dimensions = crate::save::json_tag(&serde_json::json!({
+        "minecraft:overworld": {
+            "type": "minecraft:overworld_caves",
+            "generator": { "type": "minecraft:debug" }
+        },
+        "example:moon": {
+            "type": "minecraft:the_end",
+            "generator": { "type": "minecraft:debug" }
+        }
+    }));
+    f.world("Hidden", "Hidden");
+    crate::save::write_world_gen_settings_for_preset(
+        &f.title.saves.join("Hidden"),
+        123456,
+        crate::save::WorldGen::default(),
+        None,
+        None,
+        Some(dimensions.clone()),
+        Some("example:hidden"),
+    )
+    .unwrap();
+    f.select();
+    f.click("Re-Create");
+
+    let Mode::Create { options, .. } = &f.title.mode else {
+        panic!("create")
+    };
+    assert!(options.presets.contains_key("example:hidden"));
+    assert!(!options.preset_order.iter().any(|id| id == "example:hidden"));
+    assert_eq!(options.preset_id(), "example:hidden");
+    assert_eq!(options.dimensions().as_ref(), Some(&dimensions));
+
+    f.title
+        .set_preset_data_source(crate::resource_source::ResourceSource::directory(
+            f.root.join("empty-pack"),
+        ));
+    let Mode::Create { options, .. } = &f.title.mode else {
+        panic!("create after pack refresh")
+    };
+    assert!(!options.presets.contains_key("example:hidden"));
+    assert_eq!(options.preset_id(), "example:hidden");
+    let output = f.root.join("recreated");
+    options.write_world_gen(&output, 123456).unwrap();
+    assert_eq!(
+        crate::save::read_saved_preset(&output),
+        Some((Some("example:hidden".into()), dimensions))
+    );
+
+    assert!(f.title.select_create_tab(1));
+    f.title.focused_button = Some(25);
+    f.title.confirm_key_size((480.0, 262.0));
+    let Mode::Create { options, .. } = &f.title.mode else {
+        panic!("create after cycling")
+    };
+    assert_ne!(options.preset_id(), "example:hidden");
+    assert!(options.dimensions().is_none());
+    assert!(options.restored_preset.is_none());
+}
+
+#[test]
+fn recreating_preserves_saved_stems_without_a_valid_preset_id() {
+    for saved_id in [None, Some("not an id")] {
+        let mut f = Fixture::new();
+        f.world("Older", "Older");
+        let generation = crate::save::WorldGen {
+            preset: crate::save::WorldPreset::LargeBiomes,
+            ..Default::default()
+        };
+        let mut dimensions = crate::save::new_world_gen_settings(123456, generation, None, None)
+            .get("dimensions")
+            .unwrap()
+            .clone();
+        let moon = dimensions.get("minecraft:the_end").unwrap().clone();
+        let Tag::Compound(stems) = &mut dimensions else {
+            unreachable!()
+        };
+        stems.insert("example:moon".into(), moon);
+        crate::save::write_world_gen_settings_for_preset(
+            &f.title.saves.join("Older"),
+            123456,
+            generation,
+            None,
+            None,
+            Some(dimensions.clone()),
+            saved_id,
+        )
+        .unwrap();
+        f.select();
+        f.click("Re-Create");
+        let Action::Create { options, .. } = f.click("Create New World") else {
+            panic!("create action")
+        };
+        assert_eq!(options.preset_id(), "minecraft:large_biomes");
+        let output = f.root.join("recreated");
+        options.write_world_gen(&output, 123456).unwrap();
+        assert_eq!(
+            crate::save::read_saved_preset(&output),
+            Some((None, dimensions))
+        );
+        assert!(
+            crate::save::world_gen_settings(&output)
+                .unwrap()
+                .get("horizon:world_preset")
+                .is_none()
+        );
+    }
 }
 
 #[test]
