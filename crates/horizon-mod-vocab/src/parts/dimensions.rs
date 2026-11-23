@@ -69,6 +69,9 @@ impl dyn Registrar + '_ {
     /// Register a native mapper selected by a noise generator's biome-source `type`.
     /// The stem supplies `base`, a biome source, and `config`, a JSON object.
     /// An id must be in a manifest-owned namespace and unique among biome sources.
+    ///
+    /// Not on wasm: the mapper runs on native worldgen workers.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn register_biome_mapper_type<T: crate::BiomeMapperType>(
         &mut self,
         name: &str,
@@ -138,8 +141,10 @@ pub trait DimensionsRegistrar {
              type, only name one a native mod registered in its density JSON"
         );
     }
-    /// Register a mapper type. Mods reach it through `register_biome_mapper_type`.
-    /// Not on wasm: the worker mapper cannot cross the guest boundary.
+    // Private registration transport. The native-only API helper calls this
+    // method; the wire generator leaves the default in native guest builds.
+    #[doc(hidden)]
+    #[cfg(not(target_arch = "wasm32"))]
     fn add_biome_mapper_type(&mut self, name: &str, _mapper_type: Arc<dyn crate::BiomeMapperType>) {
         panic!("biome mapper type {name:?}: a wasm mod cannot register a biome mapper");
     }

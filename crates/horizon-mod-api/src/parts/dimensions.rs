@@ -155,6 +155,7 @@ impl DimensionsRegistrar for PartRegistrar {
             source,
         });
     }
+    #[cfg(not(target_arch = "wasm32"))]
     fn add_biome_mapper_type(&mut self, name: &str, mapper_type: Arc<dyn crate::BiomeMapperType>) {
         let id = match self.owned_declaration_id(name) {
             Ok(id) => id,
