@@ -2,7 +2,7 @@
 //! at startup and looked up when a level stem's `biome_source` names one.
 //! Like a mod's chunk generator it runs on the worldgen worker threads, so it
 //! keeps no mutable state and has no `Host`.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, OnceLock};
 
 /// A biome source's engine side, as the executable's adapter sees it.
@@ -30,6 +30,104 @@ pub fn install_mod_biome_sources(sources: ModBiomeSources) -> Result<(), ModBiom
 /// The installed biome sources: empty until the executable installs the mods'.
 pub fn mod_biome_sources() -> &'static ModBiomeSources {
     MOD_BIOME_SOURCES.get().unwrap_or(&EMPTY)
+}
+
+/// A configured mapper supplied by the executable.
+pub trait ModBiomeMapper: Send + Sync {
+    fn additional_biomes(&self) -> Vec<String>;
+    fn map(&self, parent: &str, quart: [i32; 3], seed: i64) -> Result<Option<u16>, String>;
+}
+
+/// The executable's adapter for a native mapper factory.
+pub trait ModBiomeMapperType: Send + Sync {
+    fn decode(&self, config: &str) -> Result<Arc<dyn ModBiomeMapper>, String>;
+}
+
+/// The installed mapper factories, named by biome-source id.
+pub type ModBiomeMapperTypes = BTreeMap<String, Arc<dyn ModBiomeMapperType>>;
+static MOD_BIOME_MAPPER_TYPES: OnceLock<ModBiomeMapperTypes> = OnceLock::new();
+static EMPTY_MAPPERS: ModBiomeMapperTypes = BTreeMap::new();
+
+/// Install the process-wide mapper factory table once.
+pub fn install_mod_biome_mapper_types(
+    types: ModBiomeMapperTypes,
+) -> Result<(), ModBiomeMapperTypes> {
+    MOD_BIOME_MAPPER_TYPES.set(types)
+}
+
+pub(super) fn mod_biome_mapper_types() -> &'static ModBiomeMapperTypes {
+    MOD_BIOME_MAPPER_TYPES.get().unwrap_or(&EMPTY_MAPPERS)
+}
+
+/// A mapper bound to the saved configuration of one level.
+pub struct LevelBiomeMapper {
+    id: String,
+    mapper: Arc<dyn ModBiomeMapper>,
+    additions: Vec<String>,
+    seed: i64,
+}
+
+impl LevelBiomeMapper {
+    pub(super) fn bind(
+        id: &str,
+        config: &str,
+        known_biomes: &BTreeSet<String>,
+        seed: i64,
+    ) -> Result<Self, String> {
+        let factory = mod_biome_mapper_types()
+            .get(id)
+            .ok_or_else(|| format!("unknown biome mapper type {id}"))?;
+        let mapper = factory
+            .decode(config)
+            .map_err(|e| format!("biome mapper {id}: {e}"))?;
+        let additions = mapper.additional_biomes();
+        if additions.len() > usize::from(u16::MAX) + 1 {
+            return Err(format!(
+                "biome mapper {id} lists too many additional biomes"
+            ));
+        }
+        if let Some(name) = additions.iter().find(|name| !known_biomes.contains(*name)) {
+            return Err(format!("biome mapper {id} names the unknown biome {name}"));
+        }
+        Ok(Self {
+            id: id.to_owned(),
+            mapper,
+            additions,
+            seed,
+        })
+    }
+
+    pub(super) fn additions(&self) -> &[String] {
+        &self.additions
+    }
+
+    pub(super) fn sample<'a>(
+        &'a self,
+        parent: &'a str,
+        quart: [i32; 3],
+    ) -> Result<&'a str, String> {
+        match self
+            .mapper
+            .map(parent, quart, self.seed)
+            .map_err(|e| format!("biome mapper {}: {e}", self.id))?
+        {
+            None => Ok(parent),
+            Some(index) => self
+                .additions
+                .get(usize::from(index))
+                .map(String::as_str)
+                .ok_or_else(|| format!("biome mapper {} returned unknown index {index}", self.id)),
+        }
+    }
+}
+
+impl std::fmt::Debug for LevelBiomeMapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LevelBiomeMapper")
+            .field("id", &self.id)
+            .field("additions", &self.additions)
+            .finish_non_exhaustive()
+    }
 }
 
 /// A registered biome source bound to one level: its possible biomes resolved

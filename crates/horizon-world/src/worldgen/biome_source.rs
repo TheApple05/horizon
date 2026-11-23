@@ -5,7 +5,7 @@ pub mod region_selector;
 mod region_selector_tests;
 pub mod regions;
 mod runtime;
-pub use codec::{BiomeSet, BiomeSourceCatalog, BiomeSourceDefinition};
+pub use codec::{BiomeSet, BiomeSourceCatalog, BiomeSourceDefinition, MappedBiomeSource};
 use horizon_core::density::{DensitySampler, SampleError, SamplerContext};
 pub use runtime::{BiomeSourceError, BiomeSourceResolver, ResolvedBiomeSource};
 

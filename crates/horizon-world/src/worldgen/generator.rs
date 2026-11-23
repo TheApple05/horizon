@@ -17,9 +17,7 @@ use super::{
     biome::BiomeId,
     biome_chunk::{BiomeChunk, BiomeRegion},
     biome_chunks::BiomeChunks,
-    biome_source::{
-        BiomeSourceCatalog, BiomeSourceDefinition, ResolvedBiomeSource, regions::RegionLayout,
-    },
+    biome_source::{BiomeSourceCatalog, ResolvedBiomeSource, regions::RegionLayout},
     biome_temperature::{BiomeTemperature, BiomeTemperatureSettings},
     carver::{CarverCatalog, WorldCarver, generate_carving_mask},
     carving::{CarvingBlocks, apply_carving_mask_shared},
@@ -478,7 +476,7 @@ where
             .resolve(&data.presets, seed)
             .map_err(|e| resource(format!("biome source: {e}")))?;
         // Only the multi-noise presets (Overworld, Nether) take regions, not inline point lists.
-        let source = if matches!(definition, BiomeSourceDefinition::Preset { .. }) {
+        let source = if definition.uses_regions() {
             source
                 .with_regions(regions, &root)
                 .map_err(|e| resource(format!("biome regions: {e}")))?

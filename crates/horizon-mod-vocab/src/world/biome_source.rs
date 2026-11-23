@@ -28,6 +28,32 @@ pub trait BiomeSource: Send + Sync + 'static {
     fn noise_biome(&self, quart: [i32; 3], seed: i64) -> u16;
 }
 
+/// A native biome mapper type chosen by a noise generator's biome source.
+/// Registered at startup, it creates independent mappers from saved stems.
+pub trait BiomeMapperType: Send + Sync + 'static {
+    /// Decode the stem's bounded `config` JSON object. An error refuses the level.
+    fn decode(&self, config: &str) -> Result<Arc<dyn BiomeMapper>, String>;
+}
+
+/// A configured mapper over the biome source in the same level stem.
+pub trait BiomeMapper: Send + Sync + 'static {
+    /// The additional biome ids, read once when the level opens.
+    fn additional_biomes(&self) -> Vec<String>;
+
+    /// Return an index into the additional biomes, or `None` to keep the base biome.
+    /// An out-of-range index or an error fails sampling. On worldgen workers, the same
+    /// base biome, quart coordinates and world seed must always give the same result.
+    fn map(
+        &self,
+        base_biome: &str,
+        quart: [i32; 3],
+        seed: i64,
+    ) -> Result<Option<u16>, String>;
+}
+
+/// A registered native mapper type.
+pub(crate) type BiomeMapperTypeInfo = (String, Arc<dyn BiomeMapperType>);
+
 /// A registered biome source, its possible biomes listed once at registration.
 pub(crate) struct BiomeSourceInfo {
     pub(crate) id: Box<str>,
@@ -50,4 +76,10 @@ pub fn biome_source_declarations() -> Vec<(String, Vec<String>, Arc<dyn BiomeSou
             )
         })
         .collect()
+}
+
+// hidden: the executable installs these factories before any level opens.
+#[doc(hidden)]
+pub fn biome_mapper_type_declarations() -> Vec<(String, Arc<dyn BiomeMapperType>)> {
+    crate::parts::installed_biome_mapper_types().to_vec()
 }

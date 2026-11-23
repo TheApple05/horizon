@@ -302,6 +302,31 @@ biomes refuses to open, naming the source and the biome, as does a level stem na
 is gone. A wasm mod's registrar refuses `register_biome_source`, naming the source: `BiomeSource`
 is not bound by the generated wasm worker interface.
 
+### Configured biome mappers
+
+A native mod can register a `BiomeMapperType` with `register_biome_mapper_type`. A noise
+generator's level stem selects the mapper and saves its settings beside the base biome source:
+
+```json
+{
+  "type": "mymod:highlands",
+  "base": {"type": "minecraft:multi_noise", "preset": "minecraft:overworld"},
+  "config": {"enabled": true}
+}
+```
+
+The factory decodes the `config` object when the level opens. Its contents follow the
+same NBT representation as the rest of the stem, and the object is limited to 64 KiB.
+The level holds the returned mapper with its own settings. Its `additional_biomes`
+must name biomes already present in the world. The engine uses those ids and the base
+source's ids for structures and decoration.
+
+For each quart cell, `map` receives the base source's selected biome, the quart
+coordinates and the world seed. Return `None` to keep the base biome or an index into
+`additional_biomes` to replace it. An invalid index or a returned error fails sampling.
+A mapper cannot wrap another mapper. Its id shares the namespace of other native
+biome sources, and the registrar accepts mapper factories from native mods.
+
 ### Density function types
 
 A density function type is a mod's code for a node of the density graph: any density JSON, a data

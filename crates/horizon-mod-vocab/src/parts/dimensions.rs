@@ -17,6 +17,11 @@ pub(crate) fn installed_biome_source_list() -> &'static [crate::world::biome_sou
     installed().map_or(&[], |installed| installed.biome_sources.as_slice())
 }
 
+pub(crate) fn installed_biome_mapper_types()
+-> &'static [crate::world::biome_source::BiomeMapperTypeInfo] {
+    installed().map_or(&[], |installed| installed.biome_mapper_types.as_slice())
+}
+
 /// The density function types registered at startup, for the executable to hand to the engine.
 pub(crate) fn installed_density_function_type_list()
 -> &'static [crate::world::density_function::DensityFunctionTypeInfo] {
@@ -60,6 +65,16 @@ impl dyn Registrar + '_ {
     /// mods at startup, naming the mod.
     pub fn register_biome_source<T: crate::BiomeSource>(&mut self, name: &str, source: T) {
         self.add_biome_source(name, Arc::new(source));
+    }
+    /// Register a native mapper selected by a noise generator's biome-source `type`.
+    /// The stem supplies `base`, a biome source, and `config`, a JSON object.
+    /// An id must be in a manifest-owned namespace and unique among biome sources.
+    pub fn register_biome_mapper_type<T: crate::BiomeMapperType>(
+        &mut self,
+        name: &str,
+        mapper_type: T,
+    ) {
+        self.add_biome_mapper_type(name, Arc::new(mapper_type));
     }
     /// Register density function type `name` (`plates` or `mymod:plates`) once at startup: any
     /// density JSON, a data pack's density function, noise router or noise settings, can then
@@ -122,5 +137,10 @@ pub trait DimensionsRegistrar {
             "density function type {name:?}: a wasm mod cannot register a density function \
              type, only name one a native mod registered in its density JSON"
         );
+    }
+    /// Register a mapper type. Mods reach it through `register_biome_mapper_type`.
+    /// Not on wasm: the worker mapper cannot cross the guest boundary.
+    fn add_biome_mapper_type(&mut self, name: &str, _mapper_type: Arc<dyn crate::BiomeMapperType>) {
+        panic!("biome mapper type {name:?}: a wasm mod cannot register a biome mapper");
     }
 }

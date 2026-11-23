@@ -9,7 +9,7 @@ use crate::worldgen::{
     DecodeError,
     biome::{BiomeError, BiomeResolver, MultiNoiseBiomeSource},
     climate::{ClimateSampler, ClimateVolume},
-    mod_biome_sources::{LevelBiomeSource, mod_biome_sources},
+    mod_biome_sources::{LevelBiomeMapper, LevelBiomeSource, mod_biome_sources},
 };
 use horizon_core::{
     density::{DensitySampler, SampleError, SamplerContext},
@@ -70,11 +70,21 @@ pub enum ResolvedBiomeSource {
     Regions(RegionBiomeSource),
     /// A biome source a mod registered, over one world's seed.
     Registered(LevelBiomeSource<String>),
+    /// A biome source whose results pass through a level's native mapper.
+    Mapped(Box<ResolvedBiomeSource>, LevelBiomeMapper),
 }
 impl BiomeSourceDefinition {
+    pub(in crate::worldgen) fn uses_regions(&self) -> bool {
+        match self {
+            Self::Preset { .. } => true,
+            Self::Mapped(source) => source.base.uses_regions(),
+            _ => false,
+        }
+    }
+
     /// Resolve a decoded definition using immutable, authenticated quantized
     /// preset tables. This does not execute vanilla's built-in preset builders.
-    /// Only a mod's registered source reads the world's `seed`.
+    /// Only a mod's registered source or configured mapper reads the world's `seed`.
     pub fn resolve(
         &self,
         presets: &BTreeMap<String, String>,
@@ -109,6 +119,11 @@ impl BiomeSourceDefinition {
                 .ok_or_else(|| BiomeSourceError::Registered(format!("unknown biome source {id}")))?
                 .map_err(BiomeSourceError::Registered)?,
             ),
+            Self::Mapped(source) => ResolvedBiomeSource::Mapped(
+                Box::new(source.base.resolve(presets, seed)?),
+                LevelBiomeMapper::bind(&source.id, &source.config, &source.known_biomes, seed)
+                    .map_err(BiomeSourceError::Registered)?,
+            ),
         })
     }
 }
@@ -133,6 +148,11 @@ impl ResolvedBiomeSource {
                 .collect(),
             Self::Regions(source) => source.biomes().collect(),
             Self::Registered(source) => source.biomes().iter().map(String::as_str).collect(),
+            Self::Mapped(base, mapper) => {
+                let mut biomes = base.possible_biomes();
+                biomes.extend(mapper.additions().iter().map(String::as_str));
+                biomes
+            }
         }
     }
     /// A multi-noise source with `layout`'s regions over it, read from the generator's
@@ -151,6 +171,9 @@ impl ResolvedBiomeSource {
             (Self::MultiNoise(vanilla), Some(layout)) if !layout.regions.is_empty() => {
                 Self::Regions(RegionBiomeSource::new(vanilla, layout, root)?)
             }
+            (Self::Mapped(base, mapper), layout) => {
+                Self::Mapped(Box::new(base.with_regions(layout, root)?), mapper)
+            }
             (source, _) => source,
         })
     }
@@ -168,6 +191,9 @@ impl ResolvedBiomeSource {
             Self::MultiNoise(source) => BiomeSourceResolver::MultiNoise(source.resolver(climate)),
             Self::Regions(source) => BiomeSourceResolver::Regions(source.resolver(climate)),
             Self::Registered(source) => BiomeSourceResolver::Registered(source),
+            Self::Mapped(base, mapper) => {
+                BiomeSourceResolver::Mapped(Box::new(base.resolver(climate, erosion)), mapper)
+            }
         }
     }
 }
@@ -179,6 +205,7 @@ pub enum BiomeSourceResolver<'a> {
     MultiNoise(BiomeResolver<'a>),
     Regions(RegionResolver<'a>),
     Registered(&'a LevelBiomeSource<String>),
+    Mapped(Box<BiomeSourceResolver<'a>>, &'a LevelBiomeMapper),
 }
 impl<'a> BiomeSourceResolver<'a> {
     pub fn sample(
@@ -193,6 +220,9 @@ impl<'a> BiomeSourceResolver<'a> {
             Self::MultiNoise(source) => source.sample(context, quart)?,
             Self::Regions(source) => source.sample(context, quart)?,
             Self::Registered(source) => source.noise_biome(quart).as_str(),
+            Self::Mapped(base, mapper) => mapper
+                .sample(base.sample(context, quart)?, quart)
+                .map_err(BiomeSourceError::Registered)?,
         })
     }
     /// Native fixed/checkerboard/End and registered sources do not pre-sample a climate volume.
@@ -206,6 +236,7 @@ impl<'a> BiomeSourceResolver<'a> {
         match self {
             Self::MultiNoise(source) => Ok(Some(source.prepare_volume(context, minimum, extents)?)),
             Self::Regions(source) => Ok(Some(source.prepare_volume(context, minimum, extents)?)),
+            Self::Mapped(base, _) => base.prepare_volume(context, minimum, extents),
             _ => Ok(None),
         }
     }
@@ -221,6 +252,11 @@ impl<'a> BiomeSourceResolver<'a> {
             }
             (Self::Regions(source), Some(volume)) => {
                 return Ok(source.sample_prepared(volume, quart)?);
+            }
+            (Self::Mapped(base, mapper), volume) => {
+                return mapper
+                    .sample(base.sample_prepared(context, volume, quart)?, quart)
+                    .map_err(BiomeSourceError::Registered);
             }
             _ => {}
         }

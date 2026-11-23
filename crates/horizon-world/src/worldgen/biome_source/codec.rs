@@ -4,10 +4,13 @@ use crate::worldgen::{
     climate::{ParameterPoint, decode_parameter_point, unquantize},
     density::identifier,
     int_range,
-    mod_biome_sources::{LevelBiomeSource, mod_biome_sources},
+    mod_biome_sources::{LevelBiomeSource, mod_biome_mapper_types, mod_biome_sources},
     optional, required,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
+const MAX_MAPPER_CONFIG_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BiomeSet {
@@ -37,10 +40,20 @@ pub enum BiomeSourceDefinition {
     },
     /// A biome source a mod registered, by its id (`modid:chaos`).
     Registered(String),
+    /// A native mapper over the base source named by a saved level stem.
+    Mapped(Box<MappedBiomeSource>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MappedBiomeSource {
+    pub(super) id: String,
+    pub(super) base: BiomeSourceDefinition,
+    pub(super) config: String,
+    pub(super) known_biomes: Arc<BTreeSet<String>>,
 }
 #[derive(Clone, Debug)]
 pub struct BiomeSourceCatalog {
-    biomes: BTreeSet<String>,
+    biomes: Arc<BTreeSet<String>>,
     tags: BTreeMap<String, Vec<String>>,
     presets: BTreeSet<String>,
 }
@@ -72,7 +85,7 @@ impl BiomeSourceCatalog {
             }
         }
         Ok(Self {
-            biomes,
+            biomes: Arc::new(biomes),
             tags: resolved,
             presets,
         })
@@ -129,6 +142,13 @@ impl BiomeSourceCatalog {
         Ok(BiomeSourceDefinition::MultiNoise(result))
     }
     pub fn decode(&self, json: &str) -> Result<BiomeSourceDefinition, DecodeError> {
+        self.decode_source(json, true)
+    }
+    fn decode_source(
+        &self,
+        json: &str,
+        allow_mapper: bool,
+    ) -> Result<BiomeSourceDefinition, DecodeError> {
         let object: Object = serde_json::from_str(json)?;
         let kind = identifier(&serde_json::from_str::<String>(
             required(&object, "type")?.get(),
@@ -183,6 +203,22 @@ impl BiomeSourceCatalog {
                     }
                     BiomeSourceDefinition::Preset { name, inline: true }
                 }
+            }
+            _ if mod_biome_mapper_types().contains_key(&kind) => {
+                if !allow_mapper {
+                    return Err(DecodeError::Field("nested biome mapper"));
+                }
+                let config = required(&object, "config")?.get();
+                if config.len() > MAX_MAPPER_CONFIG_BYTES || !config.starts_with('{') {
+                    return Err(DecodeError::Field("biome mapper config"));
+                }
+                let base = self.decode_source(required(&object, "base")?.get(), false)?;
+                BiomeSourceDefinition::Mapped(Box::new(MappedBiomeSource {
+                    id: kind,
+                    base,
+                    config: config.to_owned(),
+                    known_biomes: Arc::clone(&self.biomes),
+                }))
             }
             _ => {
                 // A mod's source: its possible biomes must be the world's.
@@ -243,6 +279,16 @@ impl BiomeSourceCatalog {
             }
             BiomeSourceDefinition::Registered(id) => {
                 let json = format!("{{\"type\":{}}}", quoted(id));
+                self.decode(&json)?;
+                return Ok(json);
+            }
+            BiomeSourceDefinition::Mapped(source) => {
+                let base = self.encode(&source.base)?;
+                let json = format!(
+                    "{{\"type\":{},\"base\":{base},\"config\":{}}}",
+                    quoted(&source.id),
+                    source.config
+                );
                 self.decode(&json)?;
                 return Ok(json);
             }

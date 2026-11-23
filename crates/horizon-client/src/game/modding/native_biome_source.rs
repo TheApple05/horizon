@@ -1,8 +1,9 @@
 //! Native biome source adapter: the mods' `BiomeSource`s as the engine's.
 use horizon_world::worldgen::mod_biome_sources::{
-    ModBiomeSource, ModBiomeSources, install_mod_biome_sources,
+    ModBiomeMapper, ModBiomeMapperType, ModBiomeMapperTypes, ModBiomeSource, ModBiomeSources,
+    install_mod_biome_mapper_types, install_mod_biome_sources,
 };
-use mod_api::BiomeSource;
+use mod_api::{BiomeMapper, BiomeMapperType, BiomeSource};
 use std::sync::Arc;
 
 /// A mod's source with the possible biomes it listed at registration.
@@ -31,10 +32,39 @@ fn installed_biome_sources() -> ModBiomeSources {
         .collect()
 }
 
+struct Mapper(Arc<dyn BiomeMapper>);
+impl ModBiomeMapper for Mapper {
+    fn additional_biomes(&self) -> Vec<String> {
+        self.0.additional_biomes()
+    }
+    fn map(&self, parent: &str, quart: [i32; 3], seed: i64) -> Result<Option<u16>, String> {
+        self.0.map(parent, quart, seed)
+    }
+}
+
+struct MapperType(Arc<dyn BiomeMapperType>);
+impl ModBiomeMapperType for MapperType {
+    fn decode(&self, config: &str) -> Result<Arc<dyn ModBiomeMapper>, String> {
+        self.0
+            .decode(config)
+            .map(|mapper| Arc::new(Mapper(mapper)) as Arc<dyn ModBiomeMapper>)
+    }
+}
+
+fn installed_biome_mapper_types() -> ModBiomeMapperTypes {
+    mod_api::__private::biome_mapper_type_declarations()
+        .into_iter()
+        .map(|(id, mapper)| (id, Arc::new(MapperType(mapper)) as Arc<dyn ModBiomeMapperType>))
+        .collect()
+}
+
 /// Hand the biome sources the mods registered to the engine, before any world opens.
 pub(in crate::game) fn install() {
     if install_mod_biome_sources(installed_biome_sources()).is_err() {
         log::warn!("Mod biome sources already installed; keeping the first table");
+    }
+    if install_mod_biome_mapper_types(installed_biome_mapper_types()).is_err() {
+        log::warn!("Mod biome mapper types already installed; keeping the first table");
     }
 }
 
@@ -53,6 +83,48 @@ mod tests {
         fn noise_biome(&self, [x, _, _]: [i32; 3], seed: i64) -> u16 {
             ((i64::from(x) + seed) & 1) as u16
         }
+    }
+
+    struct MapperFactory;
+    struct MapperFixture;
+
+    impl BiomeMapperType for MapperFactory {
+        fn decode(&self, config: &str) -> Result<Arc<dyn BiomeMapper>, String> {
+            if config == r#"{"enabled":true}"# {
+                Ok(Arc::new(MapperFixture))
+            } else {
+                Err("mapper is disabled".into())
+            }
+        }
+    }
+
+    impl BiomeMapper for MapperFixture {
+        fn additional_biomes(&self) -> Vec<String> {
+            vec!["minecraft:desert".into()]
+        }
+
+        fn map(&self, parent: &str, [x, _, _]: [i32; 3], seed: i64) -> Result<Option<u16>, String> {
+            Ok((parent == "minecraft:plains" && i64::from(x) == seed).then_some(0))
+        }
+    }
+
+    #[test]
+    fn a_registered_mapper_type_reaches_the_engine() {
+        struct Registers;
+        #[mod_api::__subscriptions]
+        impl Hooks for Registers {
+            fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
+                r.register_biome_mapper_type("mapper", MapperFactory);
+            }
+        }
+        install_parts(&[ModEntry::new("test", Box::new(Registers))]).unwrap();
+        let types = installed_biome_mapper_types();
+        let factory = &types["test:mapper"];
+        assert!(factory.decode(r#"{"enabled":false}"#).is_err());
+        let mapper = factory.decode(r#"{"enabled":true}"#).unwrap();
+        assert_eq!(mapper.additional_biomes(), ["minecraft:desert"]);
+        assert_eq!(mapper.map("minecraft:plains", [7, 0, 0], 7).unwrap(), Some(0));
+        assert_eq!(mapper.map("minecraft:forest", [7, 0, 0], 7).unwrap(), None);
     }
 
     /// The engine reads the mod's own code under its namespaced id, with the
@@ -111,6 +183,7 @@ mod tests {
             fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
                 r.register_biome_source("stripes", Stripes);
                 r.register_biome_source("stripes", Stripes);
+                r.register_biome_mapper_type("stripes", MapperFactory);
                 r.register_biome_source("other:stripes", Stripes);
                 r.register_biome_source("empty", Empty);
                 r.register_dimension(
@@ -124,6 +197,7 @@ mod tests {
         }
         let errors = install_parts(&[ModEntry::new("test", Box::new(Invalid))]).unwrap_err();
         let expected = [
+            "test registered biome source test:stripes twice",
             "test registered biome source test:stripes twice",
             "test declares \"other:stripes\" in unowned namespace \"other\"",
             "test registered biome source test:empty, whose possible_biomes lists no biome",

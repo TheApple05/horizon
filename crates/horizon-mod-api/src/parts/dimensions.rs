@@ -130,7 +130,9 @@ impl DimensionsRegistrar for PartRegistrar {
                  digits and _ . - with / between segments, none empty, `.` or `..`",
                 self.mod_id
             ))
-        } else if self.biome_sources.iter().any(|s| *s.id == *id) {
+        } else if self.biome_sources.iter().any(|s| *s.id == *id)
+            || self.biome_mapper_types.iter().any(|(name, _)| *name == id)
+        {
             Some(format!(
                 "{} registered biome source {id} twice",
                 self.mod_id
@@ -152,6 +154,30 @@ impl DimensionsRegistrar for PartRegistrar {
             biomes,
             source,
         });
+    }
+    fn add_biome_mapper_type(&mut self, name: &str, mapper_type: Arc<dyn crate::BiomeMapperType>) {
+        let id = match self.owned_declaration_id(name) {
+            Ok(id) => id,
+            Err(reason) => {
+                self.refused.push(reason);
+                return;
+            }
+        };
+        if !valid_level_id(&id) {
+            self.refused.push(format!(
+                "{} registered biome mapper type {id:?}, whose name is not a valid resource id",
+                self.mod_id
+            ));
+        } else if self.biome_sources.iter().any(|source| *source.id == *id)
+            || self.biome_mapper_types.iter().any(|(name, _)| *name == id)
+        {
+            self.refused.push(format!(
+                "{} registered biome source {id} twice",
+                self.mod_id
+            ));
+        } else {
+            self.biome_mapper_types.push((id, mapper_type));
+        }
     }
     fn add_density_function_type(
         &mut self,

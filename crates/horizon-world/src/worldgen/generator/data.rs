@@ -1,4 +1,5 @@
 //! Seed-independent registry resources and their load boundary.
+use super::super::biome_source::BiomeSourceDefinition;
 use super::*;
 /// Feature resources for the FEATURES status, keyed by resource identifier.
 pub(in crate::worldgen) struct FeatureResources {
@@ -436,6 +437,11 @@ impl GeneratorData {
         source_json: &str,
         source: &ResolvedBiomeSource,
     ) -> Result<Option<Arc<super::super::generator_decoration::Decoration>>, GeneratorError> {
+        // A configured mapper declares its possible additions when the level opens.
+        if matches!(source, ResolvedBiomeSource::Mapped(..)) {
+            return super::super::generator_decoration::Decoration::new(self, source)
+                .map(|decoration| decoration.map(Arc::new));
+        }
         let slot = {
             let mut cache = self.decorations.lock().unwrap_or_else(|e| e.into_inner());
             let slot = match cache.iter().position(|(k, _)| k == source_json) {
@@ -471,9 +477,11 @@ impl GeneratorData {
         )?;
         let source_json =
             preset_json["dimensions"][dimension]["generator"]["biome_source"].to_string();
-        let source = self
-            .source_catalog
-            .decode(&source_json)?
+        let definition = self.source_catalog.decode(&source_json)?;
+        if matches!(definition, BiomeSourceDefinition::Mapped(_)) {
+            return Ok(());
+        }
+        let source = definition
             .resolve(&self.presets, 0)
             .map_err(|e| resource(format!("biome source: {e}")))?;
         self.decoration_for(&source_json, &source).map(drop)
