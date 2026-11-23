@@ -213,16 +213,29 @@ impl<'a> BiomeSourceResolver<'a> {
         context: &mut SamplerContext,
         quart: [i32; 3],
     ) -> Result<&'a str, BiomeSourceError> {
-        Ok(match self {
-            Self::Fixed(source) => source.biome.as_str(),
-            Self::Checkerboard(source) => source.noise_biome(quart)?.as_str(),
-            Self::End(source, erosion) => source.noise_biome(quart, *erosion, context)?.as_str(),
-            Self::MultiNoise(source) => source.sample(context, quart)?,
-            Self::Regions(source) => source.sample(context, quart)?,
-            Self::Registered(source) => source.noise_biome(quart).as_str(),
-            Self::Mapped(base, mapper) => mapper
-                .sample(base.sample(context, quart)?, quart)
-                .map_err(BiomeSourceError::Registered)?,
+        self.sample_prepared(context, None, quart)
+    }
+    #[inline]
+    fn sample_base(
+        &mut self,
+        context: &mut SamplerContext,
+        volume: Option<&ClimateVolume>,
+        quart: [i32; 3],
+    ) -> Result<&'a str, BiomeSourceError> {
+        Ok(match (self, volume) {
+            (Self::Fixed(source), _) => source.biome.as_str(),
+            (Self::Checkerboard(source), _) => source.noise_biome(quart)?.as_str(),
+            (Self::End(source, erosion), _) => {
+                source.noise_biome(quart, *erosion, context)?.as_str()
+            }
+            (Self::MultiNoise(source), Some(volume)) => source.sample_prepared(volume, quart)?,
+            (Self::Regions(source), Some(volume)) => source.sample_prepared(volume, quart)?,
+            (Self::MultiNoise(source), None) => source.sample(context, quart)?,
+            (Self::Regions(source), None) => source.sample(context, quart)?,
+            (Self::Registered(source), _) => source.noise_biome(quart).as_str(),
+            (Self::Mapped(..), _) => {
+                return Err(BiomeSourceError::Registered("nested biome mapper".into()));
+            }
         })
     }
     /// Native fixed/checkerboard/End and registered sources do not pre-sample a climate volume.
@@ -240,26 +253,18 @@ impl<'a> BiomeSourceResolver<'a> {
             _ => Ok(None),
         }
     }
+    #[inline]
     pub fn sample_prepared(
         &mut self,
         context: &mut SamplerContext,
         volume: Option<&ClimateVolume>,
         quart: [i32; 3],
     ) -> Result<&'a str, BiomeSourceError> {
-        match (&mut *self, volume) {
-            (Self::MultiNoise(source), Some(volume)) => {
-                return Ok(source.sample_prepared(volume, quart)?);
-            }
-            (Self::Regions(source), Some(volume)) => {
-                return Ok(source.sample_prepared(volume, quart)?);
-            }
-            (Self::Mapped(base, mapper), volume) => {
-                return mapper
-                    .sample(base.sample_prepared(context, volume, quart)?, quart)
-                    .map_err(BiomeSourceError::Registered);
-            }
-            _ => {}
+        match self {
+            Self::Mapped(base, mapper) => mapper
+                .sample(base.sample_base(context, volume, quart)?, quart)
+                .map_err(BiomeSourceError::Registered),
+            base => base.sample_base(context, volume, quart),
         }
-        self.sample(context, quart)
     }
 }
