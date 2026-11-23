@@ -131,7 +131,7 @@ impl DimensionsRegistrar for PartRegistrar {
                 self.mod_id
             ))
         } else if self.biome_sources.iter().any(|s| *s.id == *id)
-            || self.biome_mapper_types.iter().any(|(name, _)| *name == id)
+            || self.biome_mapper_types.iter().any(|mapper| *mapper.id == *id)
         {
             Some(format!(
                 "{} registered biome source {id} twice",
@@ -169,14 +169,17 @@ impl DimensionsRegistrar for PartRegistrar {
                 self.mod_id
             ));
         } else if self.biome_sources.iter().any(|source| *source.id == *id)
-            || self.biome_mapper_types.iter().any(|(name, _)| *name == id)
+            || self.biome_mapper_types.iter().any(|mapper| *mapper.id == *id)
         {
             self.refused.push(format!(
                 "{} registered biome source {id} twice",
                 self.mod_id
             ));
         } else {
-            self.biome_mapper_types.push((id, mapper_type));
+            self.biome_mapper_types.push(BiomeMapperTypeInfo {
+                id: id.into(),
+                mapper_type,
+            });
         }
     }
     fn add_density_function_type(

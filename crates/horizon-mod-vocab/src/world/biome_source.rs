@@ -52,7 +52,10 @@ pub trait BiomeMapper: Send + Sync + 'static {
 }
 
 /// A registered native mapper type.
-pub(crate) type BiomeMapperTypeInfo = (String, Arc<dyn BiomeMapperType>);
+pub(crate) struct BiomeMapperTypeInfo {
+    pub(crate) id: Box<str>,
+    pub(crate) mapper_type: Arc<dyn BiomeMapperType>,
+}
 
 /// A registered biome source, its possible biomes listed once at registration.
 pub(crate) struct BiomeSourceInfo {
@@ -81,5 +84,8 @@ pub fn biome_source_declarations() -> Vec<(String, Vec<String>, Arc<dyn BiomeSou
 // hidden: the executable installs these factories before any level opens.
 #[doc(hidden)]
 pub fn biome_mapper_type_declarations() -> Vec<(String, Arc<dyn BiomeMapperType>)> {
-    crate::parts::installed_biome_mapper_types().to_vec()
+    crate::parts::installed_biome_mapper_types()
+        .iter()
+        .map(|info| (info.id.to_string(), info.mapper_type.clone()))
+        .collect()
 }

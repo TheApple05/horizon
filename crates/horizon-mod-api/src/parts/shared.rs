@@ -79,7 +79,7 @@ pub struct PartRegistrar {
     pub(crate) dimension_shape: fn(&crate::DimensionSettings) -> bool,
     pub(crate) chunk_generators: Vec<ChunkGeneratorInfo>,
     pub(crate) biome_sources: Vec<BiomeSourceInfo>,
-    pub(crate) biome_mapper_types: Vec<(String, Arc<dyn crate::BiomeMapperType>)>,
+    pub(crate) biome_mapper_types: Vec<BiomeMapperTypeInfo>,
     pub(crate) density_function_types: Vec<DensityFunctionTypeInfo>,
     pub(crate) refused: Vec<String>,
     /// The Part state keys this mod declared, with their types' Wire layouts and names.
