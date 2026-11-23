@@ -54,6 +54,17 @@ impl Coverage {
     }
 }
 
+/// `[frame] fog`: who fogs what the pack's stages draw.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Fog {
+    /// Horizon mixes vanilla's fog over the material and entity stages' results.
+    #[default]
+    Engine,
+    /// The pack fogs them itself: Horizon skips its fog there, and every stage's prelude has
+    /// `vanilla_fog`.
+    Pack,
+}
+
 impl Primaries {
     /// `Frame.luminance`: the weights that give a colour's luminance in these primaries.
     pub const fn luminance(self) -> [f32; 3] {
@@ -117,6 +128,8 @@ pub struct Manifest {
     pub material_coverage: Coverage,
     /// `[entity] coverage`.
     pub entity_coverage: Coverage,
+    /// `[frame] fog`.
+    pub fog: Fog,
     pub options: Vec<PackOption>,
     /// How the settings page lays the options out; the first page is the one it opens on.
     /// Empty: one page with every option.
@@ -140,23 +153,34 @@ pub struct Manifest {
     pub shadow: Option<Shadow>,
     /// Relief as geometry near the camera, if the pack asks for it; needs `[material]`.
     pub displacement: Option<Displacement>,
-    /// 0.2: the scene the post and material stages' `trace` reads, if the pack asks for it;
-    /// needs `[[post]]` or `[material]`.
+    /// 0.2: the scene that tracing stages read, if the pack asks for it; needs `[[post]]`,
+    /// `[[before_world]]`, `[material]` or `[entity]`.
     pub ray_tracing: Option<RayTracing>,
     /// 0.2: the motion guide the post stage's `motion_at` reads, if the pack asks for it;
     /// needs `[[post]]`.
     pub motion: Option<Motion>,
-    /// 0.2: kept resources and compute passes. Checked, not yet run.
+    /// 0.2: kept resources and compute passes.
     pub kept: crate::kept::Kept,
 }
 
-/// `[ray_tracing]` (0.2): the pack's post passes, and its material stage where it calls them,
-/// get `trace`, `trace_layers` and the other trace functions, which read the terrain around the
-/// camera where the device traces rays (`frame.has_ray_tracing`) and miss where it doesn't. No
-/// keys yet.
+/// `[ray_tracing]` (0.2): the pack's post passes, and its material, entity, compute and `[[before_world]]`
+/// stages where they call them, get `trace`, `trace_layers` and the other trace functions, which read the terrain around the
+/// camera where the device traces rays (`frame.has_ray_tracing`) and miss where it doesn't.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct RayTracing {}
+pub struct RayTracing {
+    /// `lights = true`: the stages whose files name them get the light sources around the
+    /// camera (`RayLight`, `ray_light`, `ray_lights_near`, ...), and the names are taken. Off,
+    /// the pack is built as without the key.
+    #[serde(default)]
+    pub lights: bool,
+    /// `step = true`: the stages whose files name one of its names (`trace_step`, `RayCandidate`,
+    /// the `candidate_` functions, `RAY_PASS`, `RAY_STOP`, `RAY_END`) get `trace_step`, which
+    /// runs one ray query and hands every candidate to the pack's own `ray_step` with the pack's
+    /// own `RayState`, and the names are taken. Off, the pack is built as without the key.
+    #[serde(default)]
+    pub step: bool,
+}
 
 /// `[motion]` (0.2): the pack's post passes get `scene_motion`, `motion_at`, `MotionData` and
 /// the `MOTION_` kinds, how each pixel's surface moved since last frame. No keys yet.
@@ -402,8 +426,7 @@ pub struct Stage {
     /// Shown in the GPU time overlay; the file name when absent.
     #[serde(default)]
     pub name: Option<String>,
-    /// The material stage only: whether Horizon applies its fog after the pack's colour
-    /// (true when absent); false for a pack that fogs its surfaces itself.
+    /// No longer a key (`[frame] fog` replaced `[material] fog`): read only to say so.
     #[serde(default)]
     pub fog: Option<bool>,
     /// The material and entity stages only: `"engine"` (when absent) or `"pack"`,
@@ -415,13 +438,23 @@ pub struct Stage {
     #[serde(default)]
     pub clouds: Option<bool>,
     /// The sky stage only: whether Minecraft's sun still draws over the sky (true when absent);
-    /// false for a pack whose sky draws its own. The moon stays.
+    /// false for a pack whose sky draws its own.
     #[serde(default)]
     pub sun: Option<bool>,
+    /// The sky stage only: whether Minecraft's moon still draws over the sky (true when absent);
+    /// false for a pack whose sky draws its own.
+    #[serde(default)]
+    pub moon: Option<bool>,
     /// The sky stage only: whether Minecraft's stars still draw over the sky (true when absent);
     /// false for a pack whose sky draws its own.
     #[serde(default)]
     pub stars: Option<bool>,
+    /// The sky stage only: how far the sun's and moon's path is tilted, in degrees about the
+    /// world's X axis (0 when absent), as `shaders/` packs' `sunPathRotation`: it turns
+    /// `sun_direction`, `moon_direction`, `light_direction`, the shadow camera and the sun, moon
+    /// and stars Minecraft draws over the sky. Within `SUN_PATH_ROTATIONS`.
+    #[serde(default)]
+    pub sun_path_rotation: Option<f32>,
     /// A post pass only: its target's size against the world's, 1, 0.5 or 0.25 (1 when
     /// absent); below 1 the pass writes an `output`.
     #[serde(default)]
@@ -450,10 +483,13 @@ pub struct Stage {
 
 /// The scales a post pass may draw at.
 pub const POST_SCALES: [f32; 3] = [1.0, 0.5, 0.25];
+/// The tilts `[sky] sun_path_rotation` may take, in degrees.
+pub const SUN_PATH_ROTATIONS: std::ops::RangeInclusive<f32> = -90.0..=90.0;
 /// The most `[[post]] output`s a pack may write: bindings 32 to 47, below the scene's.
 pub const MAX_POST_TARGETS: usize = 16;
 /// The memory a pack's post targets may take, in render-size `rgba16float` textures: an
-/// `output` takes its `scale`², an R-relative kept texture 2 (its two versions, any format).
+/// `output` takes its `scale`², an R-relative kept texture its two versions at their size,
+/// `2 × scale² × bytes a texel / 8`.
 pub const POST_TARGET_BUDGET: u32 = 6;
 
 /// An option the player can change: a WGSL `override` constant of the
@@ -592,6 +628,7 @@ struct RawOption {
 struct RawFrame {
     blend: Option<String>,
     primaries: Option<String>,
+    fog: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -601,9 +638,10 @@ struct RawBudget {
 }
 
 /// Whether `name` is taken from a pack's own WGSL names: by the post prelude's resources or, under
-/// `[ray_tracing]`, by its functions, or, under `[motion]`, by the motion guide's `scene_motion`
-/// and `motion_at`, or as a word WGSL reserves.
-pub(crate) fn taken(name: &str, ray_tracing: bool, motion: bool) -> bool {
+/// `[ray_tracing]`, by its functions (the light sources' only with `lights = true`, the step's
+/// only with `step = true`), or, under
+/// `[motion]`, by the motion guide's `scene_motion` and `motion_at`, or as a word WGSL reserves.
+pub(crate) fn taken(name: &str, ray_tracing: Option<&RayTracing>, motion: bool) -> bool {
     // The post prelude's functions `[ray_tracing]` brings.
     let traced = [
         "trace",
@@ -633,7 +671,9 @@ pub(crate) fn taken(name: &str, ray_tracing: bool, motion: bool) -> bool {
         "scene_surface",
     ];
     reserved.contains(&name)
-        || (ray_tracing && traced.contains(&name))
+        || (ray_tracing.is_some() && traced.contains(&name))
+        || (ray_tracing.is_some_and(|r| r.lights) && crate::stages::LIGHT_NAMES.contains(&name))
+        || (ray_tracing.is_some_and(|r| r.step) && crate::stages::STEP_NAMES.contains(&name))
         || (motion && guide.contains(&name))
         || naga::keywords::wgsl::RESERVED.contains(&name)
 }
@@ -657,7 +697,7 @@ pub(crate) fn target_name(name: &str) -> bool {
 /// texture writes it (`kept::kept_targets`).
 fn check_post_targets(
     post: &[Stage],
-    ray_tracing: bool,
+    ray_tracing: Option<&RayTracing>,
     motion: bool,
     kept: &[crate::kept::Resource],
 ) -> Result<(), String> {
@@ -709,7 +749,9 @@ fn check_post_targets(
             targets.len()
         ));
     }
-    // In sixteenths of a render-size texture, exact: a scale's square is 16, 4 or 1 of them.
+    // In sixteenths of a render-size `rgba16float` texture, exact: a scale's square is 16, 4 or 1
+    // of them, and a kept texture's two versions take that times its 4, 8 or 16 bytes a texel
+    // over 4, at least 1.
     let sixteenths = |scale: f32| {
         [16, 4, 1][POST_SCALES
             .iter()
@@ -717,7 +759,10 @@ fn check_post_targets(
             .expect("a checked scale")]
     };
     let mut costs: Vec<(&str, u32)> = targets.iter().map(|&(n, s)| (n, sixteenths(s))).collect();
-    costs.extend(kept_targets.into_iter().map(|n| (n, 32)));
+    costs.extend(kept_targets.into_iter().map(|(n, format, scale)| {
+        let bytes = u32::try_from(format.bytes()).expect("a texel's few bytes");
+        (n, sixteenths(scale) * bytes / 4)
+    }));
     let used: u32 = costs.iter().map(|c| c.1).sum();
     if used > 16 * POST_TARGET_BUDGET {
         costs.sort_by_key(|c| std::cmp::Reverse(c.1));
@@ -726,7 +771,8 @@ fn check_post_targets(
             .collect();
         return Err(format!(
             "post targets take {} render-size rgba16float textures (an `output` its scale², an \
-             R-relative [[resource]] texture 2); a pack may use {POST_TARGET_BUDGET}; largest: {}",
+             R-relative [[resource]] texture 2 × scale² × bytes a texel / 8); a pack may use \
+             {POST_TARGET_BUDGET}; largest: {}",
             f64::from(used) / 16.0,
             largest.join(", ")
         ));
@@ -770,6 +816,11 @@ impl Manifest {
         };
         let material_coverage = Coverage::parse(raw.material.as_ref(), "material").map_err(err)?;
         let entity_coverage = Coverage::parse(raw.entity.as_ref(), "entity").map_err(err)?;
+        let fog = match raw.frame.as_ref().and_then(|f| f.fog.as_deref()) {
+            None | Some("engine") => Fog::Engine,
+            Some("pack") => Fog::Pack,
+            Some(f) => return Err(err(format!("frame.fog {f:?}: engine or pack"))),
+        };
         let id_ok = (1..=64).contains(&raw.id.len())
             && raw
                 .id
@@ -802,13 +853,19 @@ impl Manifest {
             .sky
             .iter()
             .chain(&raw.vertex)
+            .chain(&raw.material)
+            .chain(&raw.weather)
             .chain(&raw.post)
             .chain(&raw.tonemap)
             .chain(&raw.entity)
             .chain(&raw.before_world)
             .any(|s| s.fog.is_some())
         {
-            return Err(err("`fog` is a key of [material] only".into()));
+            return Err(err(
+                "[material] fog is gone: [frame] fog = \"pack\" for a pack that fogs its stages \
+                 itself (the entity stage too), else leave it out and Horizon fogs them"
+                    .into(),
+            ));
         }
         if raw
             .sky
@@ -835,34 +892,34 @@ impl Manifest {
         {
             return Err(err("`scale` and `output` are keys of [[post]] only".into()));
         }
-        // Compute keys: `[[post]]` and `[[before_world]]` only, which `kept::check` reads.
+        // Compute keys: `[[post]]` and `[[before_world]]` only, and `reads` the drawn stages'
+        // too, which `kept::check` reads.
         let computes = |s: &Stage| {
-            s.compute
-                || s.dispatch.is_some()
-                || s.workgroup.is_some()
-                || !s.reads.is_empty()
-                || !s.writes.is_empty()
+            s.compute || s.dispatch.is_some() || s.workgroup.is_some() || !s.writes.is_empty()
         };
-        if raw
-            .sky
-            .iter()
-            .chain(&raw.material)
-            .chain(&raw.vertex)
+        let reads = |s: &Stage| computes(s) || !s.reads.is_empty();
+        let drawn = [
+            (&raw.material, "the terrain draws"),
+            (&raw.entity, "the entities draw"),
+            (&raw.sky, "the sky draws"),
+        ];
+        if (raw.vertex.iter())
             .chain(&raw.weather)
             .chain(&raw.tonemap)
-            .chain(&raw.entity)
-            .any(computes)
+            .any(reads)
+            || drawn.iter().any(|(s, _)| s.iter().any(computes))
         {
             return Err(err(
                 "`compute`, `dispatch`, `workgroup`, `reads` and `writes` are keys of [[post]] \
-                 and [[before_world]]"
+                 and [[before_world]], and `reads` of [material], [entity] and [sky]: they draw \
+                 with kept resources, compute passes write them"
                     .into(),
             ));
         }
         let resets = (raw.options.iter())
             .filter_map(|o| Some((o.id.clone(), o.resets.clone()?)))
             .collect();
-        let traced = raw.ray_tracing.is_some();
+        let traced = raw.ray_tracing.as_ref();
         let moving = raw.motion.is_some();
         let kept = crate::kept::check(
             raw.kept,
@@ -874,10 +931,20 @@ impl Manifest {
             resets,
         )
         .map_err(err)?;
+        for (stage, draws) in drawn {
+            if let Some(s) = stage {
+                crate::kept::drawn(s, &kept, draws).map_err(err)?;
+            }
+        }
         check_post_targets(&raw.post, traced, moving, &kept.resources).map_err(err)?;
-        if raw.ray_tracing.is_some() && raw.post.is_empty() && raw.material.is_none() {
+        let tracer = !raw.post.is_empty()
+            || raw.material.is_some()
+            || raw.entity.is_some()
+            || !kept.before_world.is_empty();
+        if raw.ray_tracing.is_some() && !tracer {
             return Err(err(
-                "[ray_tracing] needs a [[post]] pass or a [material] stage: `trace` is theirs"
+                "[ray_tracing] needs a [[post]] pass, a [[before_world]] pass, a [material] or an \
+                 [entity] stage: `trace` is theirs"
                     .into(),
             ));
         }
@@ -911,10 +978,18 @@ impl Manifest {
                 return Err(err(format!("{file:?} is not a plain path to a .wgsl file")));
             }
         }
-        let sky_only = |s: &Stage| s.clouds.is_some() || s.sun.is_some() || s.stars.is_some();
+        let sky_only = |s: &Stage| {
+            s.clouds.is_some()
+                || s.sun.is_some()
+                || s.moon.is_some()
+                || s.stars.is_some()
+                || s.sun_path_rotation.is_some()
+        };
         if raw
             .material
             .iter()
+            .chain(&raw.vertex)
+            .chain(&raw.weather)
             .chain(&raw.post)
             .chain(&raw.tonemap)
             .chain(&raw.entity)
@@ -922,8 +997,18 @@ impl Manifest {
             .any(sky_only)
         {
             return Err(err(
-                "`clouds`, `sun` and `stars` are keys of [sky] only".into()
+                "`clouds`, `sun`, `moon`, `stars` and `sun_path_rotation` are keys of [sky] only"
+                    .into(),
             ));
+        }
+        if let Some(tilt) = raw.sky.as_ref().and_then(|s| s.sun_path_rotation)
+            && !SUN_PATH_ROTATIONS.contains(&tilt)
+        {
+            return Err(err(format!(
+                "[sky] sun_path_rotation {tilt} is not in {}..={}",
+                SUN_PATH_ROTATIONS.start(),
+                SUN_PATH_ROTATIONS.end()
+            )));
         }
         if raw.options.len() > MAX_OPTIONS {
             return Err(err(format!(
@@ -941,7 +1026,7 @@ impl Manifest {
             options.push(option);
         }
         // `RayHit` has a surface's tags and material id, as `MaterialInput` does.
-        if !raw.tags.is_empty() && raw.material.is_none() && !traced {
+        if !raw.tags.is_empty() && raw.material.is_none() && traced.is_none() {
             return Err(err("tags are read by the material stage and by `trace`: \
                  give it a [material] or a [ray_tracing]"
                 .into()));
@@ -968,7 +1053,7 @@ impl Manifest {
             }
         }
         let solid_ids = raw.shadow.iter().any(|s| !s.solid_materials.is_empty());
-        if !raw.materials.is_empty() && raw.material.is_none() && !solid_ids && !traced {
+        if !raw.materials.is_empty() && raw.material.is_none() && !solid_ids && traced.is_none() {
             return Err(err(
                 "materials are read by the material stage, `trace` and \
                  shadow.solid_materials: give it a [material] or a [ray_tracing], or use \
@@ -1013,7 +1098,10 @@ impl Manifest {
         }
         let mut textures: Vec<PackTexture> = Vec::new();
         for t in raw.textures {
-            if !pack_identifier(&t.id) || textures.iter().any(|o| o.id == t.id) {
+            // The id is declared in every stage's prelude: a word WGSL reserves would be refused
+            // there, at a line of the prelude rather than of the pack.
+            let reserved = naga::keywords::wgsl::RESERVED.contains(&t.id.as_str());
+            if !pack_identifier(&t.id) || reserved || textures.iter().any(|o| o.id == t.id) {
                 return Err(err(format!(
                     "texture id {:?} is not a WGSL identifier, or is declared twice",
                     t.id
@@ -1234,6 +1322,7 @@ impl Manifest {
             primaries,
             material_coverage,
             entity_coverage,
+            fog,
             options,
             pages,
             tags: raw.tags,
@@ -1340,8 +1429,7 @@ impl Manifest {
         out
     }
 
-    /// Whether the pack declares kept resources or compute passes, which the game doesn't run
-    /// yet.
+    /// Whether the pack declares kept resources or compute passes.
     pub fn computes(&self) -> bool {
         !self.kept.resources.is_empty()
             || !self.kept.before_world.is_empty()

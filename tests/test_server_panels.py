@@ -15,9 +15,12 @@ EGG = SERVER / "pterodactyl-egg.json"
 START = SERVER / "panel-start.sh"
 AMP = SERVER / "amp"
 INIT_RS = (ROOT / "crates/horizon-server/src/init.rs").read_text()
-CONFIG_RS = (ROOT / "crates/horizon-server/src/config.rs").read_text()
-DEDICATED_RS = (ROOT / "crates/horizon-client/src/game/dedicated.rs").read_text()
-LAN_RS = (ROOT / "crates/horizon-client/src/game/lan.rs").read_text()
+CONFIG_RS = (ROOT / "crates/horizon-server-launch/src/config.rs").read_text()
+DEDICATED_RS = (next(ROOT.glob('crates/horizon-client/src/game/*/dedicated/mod.rs'))).read_text()
+# The leave lines are logged by the shared leave path (native_hooks/player_leave.rs).
+LAN_RS = (ROOT / "crates/horizon-client/src/game/network/lan/mod.rs").read_text() + (
+    ROOT / "crates/horizon-client/src/game/native_hooks/player_leave.rs"
+).read_text()
 
 # Read at install only, so init.rs does not know them.
 INSTALL_ONLY = {"HORIZON_VERSION"}
@@ -26,8 +29,9 @@ PANEL_OWNED = {"HORIZON_PORT"}
 
 
 def init_variables():
-    """The HORIZON_* names `Answers::from_env` reads."""
-    body = INIT_RS.split("pub fn from_env", 1)[1].split("\n    }\n", 1)[0]
+    """The HORIZON_* names the answers read from the environment: every `var("HORIZON_X")` or `flag("HORIZON_X")` in
+    `impl Answers`, whatever the functions there are called."""
+    body = INIT_RS.split("impl Answers {", 1)[1].split("\n}\n", 1)[0]
     return set(re.findall(r'(?:var|flag)\("(HORIZON_[A-Z]+)"\)', body))
 
 

@@ -881,6 +881,8 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
+            resolved: Default::default(),
         };
         // Every texture its own rect, so a swapped texture shows.
         let atlas = |name: &str| {
@@ -916,21 +918,41 @@ mod tests {
                         id.as_str(),
                         "minecraft:villager" | "minecraft:zombie_villager"
                     ) {
-                        m.extra.variant2 = 5;
-                        m.extra.variant3 = 3;
+                        m.extra.profession = crate::mobs::villager::ProfessionState::from_index(5);
+                        m.extra.villager_level = 3;
                     }
                     // White field markings (`entityTranslucent`).
                     if id == "minecraft:horse" {
                         m.extra.variant2 = 2;
                     }
                     let mut cpu = Vec::new();
-                    render::render_with(&m, 0.4, camera, &atlas, 0x50a0, &data, &[], &mut cpu);
+                    render::render_with(
+                        &m,
+                        0.4,
+                        camera,
+                        &atlas,
+                        0x50a0,
+                        &data,
+                        &Default::default(),
+                        &[],
+                        &mut cpu,
+                    );
                     models.begin(&mut frame, store.len() as u32);
                     models.tagged = eyes;
                     let mut gpu = Vec::new();
                     let mut skin = Skin::new(&mut models, &mut frame);
                     render::render_skinned(
-                        &m, 0.4, camera, &atlas, 0x50a0, &data, &mut gpu, &mut skin,
+                        &m,
+                        0.4,
+                        camera,
+                        &atlas,
+                        0x50a0,
+                        &data,
+                        &Default::default(),
+                        Default::default(),
+                        None,
+                        &mut gpu,
+                        &mut skin,
                     );
                     let bounds = skin.bounds;
                     if frame.reset {

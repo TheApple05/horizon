@@ -15,10 +15,14 @@ import lab
 
 def snapshot_tests(build):
     """Run the prepared-resource hurt, landing, world lifetime and wire cases."""
+    # Fresh-case tests read the prepared resources from the environment
+    # (native_entity_refs.rs:980); without them the parent panics.
+    resources = os.environ.get("HORIZON_TEST_RESOURCES") or str(lab.RESOURCES)
     run = subprocess.run(
         ["cargo", "test", "--locked", "-p", "horizon-client", "-p", "horizon-client-lib",
          "--lib", "datapack_damage_", "--", "--include-ignored"],
-        cwd=lab.ROOT, text=True, capture_output=True)
+        cwd=lab.ROOT, text=True, capture_output=True,
+        env={**os.environ, "HORIZON_TEST_RESOURCES": resources})
     output = run.stdout + run.stderr
     (build / "snapshot-tests.log").write_text(output)
     if run.returncode:
@@ -77,7 +81,7 @@ def main():
                lab.ROOT / "crates/horizon-client/src/health/datapack_tests.rs",
                lab.ROOT / "crates/horizon-client/src/landing.rs",
                lab.ROOT / "crates/horizon-client/src/lan/data.rs",
-               lab.ROOT / "crates/horizon-client/src/game/lan.rs"]
+               lab.ROOT / "crates/horizon-client/src/game/network/lan/mod.rs"]
     hashes = {str(p.relative_to(lab.ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     libraries = sorted((args.game_dir / "libraries/server").rglob("*.jar"))
     jar = args.game_dir / "jars/server-game.jar"
