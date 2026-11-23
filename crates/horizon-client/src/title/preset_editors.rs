@@ -267,13 +267,16 @@ impl WorldOptions {
     }
     /// Write creation settings, including the custom editor's dimension stems.
     pub fn write_world_gen(&self, dir: &Path, seed: i64) -> crate::Result<()> {
-        crate::save::write_world_gen_settings_with(
+        let selected = (self.custom_preset.is_some() || self.preset_dimensions.is_some())
+            .then(|| self.preset_id());
+        crate::save::write_world_gen_settings_for_preset(
             dir,
             seed,
             self.world_gen(),
             self.flat_settings(),
             self.single_biome(),
             self.dimensions(),
+            selected,
         )
     }
 }

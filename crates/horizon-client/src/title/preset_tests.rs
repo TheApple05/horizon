@@ -272,6 +272,23 @@ fn registered_world_preset_editor_commits_only_on_done_and_saves_its_dimensions(
         crate::save::world_gen_settings(&save).unwrap().get("seed"),
         Some(&Tag::Long(123))
     );
+    let mut recreated = WorldOptions::of_world(
+        &crate::save::Level::default(),
+        false,
+        &save,
+        std::sync::Arc::default(),
+    );
+    recreated.set_additional_data_packs(options.additional_data_packs.clone());
+    recreated.data_packs = options.data_packs.clone();
+    recreated.refresh_presets(&f.title.resources, f.title.preset_data.as_deref());
+    assert_eq!(recreated.preset_id(), options.preset_id());
+    assert_eq!(recreated.editor_dimensions(), Some(edited.clone()));
+    let copy = f.root.join("recreated");
+    recreated.write_world_gen(&copy, 123).unwrap();
+    assert_eq!(
+        crate::save::world_gen_settings(&copy),
+        crate::save::world_gen_settings(&save)
+    );
     let saved = crate::save::world_gen_settings(&save);
     let mut refused = options.clone();
     refused.preset_dimensions = Some(Tag::Compound(Default::default()));

@@ -166,6 +166,8 @@ impl WorldOptions {
         registry: std::sync::Arc<crate::gamerules::RuleRegistry>,
     ) -> Self {
         let generation = crate::save::WorldGen::read(dir).unwrap_or_default();
+        let (preset, preset_dimensions) = crate::save::read_saved_preset(dir).unzip();
+        let vanilla_preset = preset.as_deref().and_then(crate::save::WorldPreset::of_id);
         let (pack_dir, data_packs) = crate::datapack::for_recreate(dir);
         Self {
             hardcore: level.hardcore,
@@ -174,7 +176,9 @@ impl WorldOptions {
                 .position(|d| *d == level.difficulty)
                 .unwrap_or(2),
             commands: Some(commands),
-            world_type: generation.preset,
+            custom_preset: preset.filter(|_| vanilla_preset.is_none()),
+            preset_dimensions,
+            world_type: vanilla_preset.unwrap_or(generation.preset),
             single_biome: fixed_biome(dir).unwrap_or_else(|| "minecraft:plains".into()),
             flat_settings: (generation.preset == crate::save::WorldPreset::Flat)
                 .then(|| super::flat::FlatSettings::from_world(dir))
