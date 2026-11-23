@@ -95,6 +95,113 @@ fn recreating_a_debug_world_preset_keeps_its_hidden_type() {
     assert_eq!(options.world_gen().preset, crate::save::WorldPreset::Debug);
 }
 
+fn recreate_builtin_preset_for_edit(f: &mut Fixture, preset: crate::save::WorldPreset) -> Tag {
+    f.world("Source", "Source");
+    let generation = crate::save::WorldGen {
+        preset,
+        ..Default::default()
+    };
+    let settings = crate::save::new_world_gen_settings(123456, generation, None, None);
+    let mut dimensions = settings.get("dimensions").unwrap().clone();
+    let moon = dimensions.get("minecraft:the_end").unwrap().clone();
+    let Tag::Compound(stems) = &mut dimensions else {
+        unreachable!()
+    };
+    stems.insert("example:moon".into(), moon);
+    if preset == crate::save::WorldPreset::SingleBiomeSurface {
+        let Tag::Compound(generator) = dimensions
+            .get_mut("minecraft:overworld")
+            .unwrap()
+            .get_mut("generator")
+            .unwrap()
+        else {
+            unreachable!()
+        };
+        generator.insert("settings".into(), Tag::String("example:overworld".into()));
+    }
+    crate::save::write_world_gen_settings_for_preset(
+        &f.title.saves.join("Source"),
+        123456,
+        generation,
+        None,
+        None,
+        Some(dimensions.clone()),
+        Some(preset.id()),
+    )
+    .unwrap();
+
+    f.select();
+    f.click("Re-Create");
+    let Mode::Create { options, .. } = &f.title.mode else {
+        panic!("create")
+    };
+    assert_eq!(options.preset_dimensions.as_ref(), Some(&dimensions));
+    assert!(f.title.select_create_tab(1));
+    f.title.focused_button = Some(26);
+    f.title.confirm_key_size((480.0, 262.0));
+    dimensions
+}
+
+fn save_recreated_builtin_preset(f: &mut Fixture, original: &Tag) -> Tag {
+    f.click("Done");
+    let Action::Create { options, .. } = f.click("Create New World") else {
+        panic!("create action")
+    };
+    let dir = f.root.join("recreated");
+    options.write_world_gen(&dir, 123456).unwrap();
+    let (preset, dimensions) = crate::save::read_saved_preset(&dir).unwrap();
+    assert_eq!(preset, options.preset_id());
+    for level in ["minecraft:the_nether", "minecraft:the_end", "example:moon"] {
+        assert_eq!(dimensions.get(level), original.get(level));
+    }
+    dimensions.get("minecraft:overworld").unwrap().clone()
+}
+
+#[test]
+fn recreating_an_edited_flat_preset_saves_new_layers() {
+    let mut f = Fixture::new();
+    let original = recreate_builtin_preset_for_edit(&mut f, crate::save::WorldPreset::Flat);
+    assert!(matches!(f.title.mode, Mode::CreateFlat { .. }));
+    f.title.click(240.0, 65.0, (480.0, 262.0));
+    f.click("Remove Layer");
+    let settings = save_recreated_builtin_preset(&mut f, &original);
+    let mut expected = flat::FlatSettings::default();
+    expected.layers.pop();
+    assert_eq!(
+        settings.get("generator").and_then(|g| g.get("settings")),
+        Some(&expected.to_tag())
+    );
+}
+
+#[test]
+fn recreating_an_edited_single_biome_preset_saves_the_new_biome() {
+    let mut f = Fixture::new();
+    fs::create_dir_all(f.root.join("worldgen")).unwrap();
+    fs::write(
+        f.root.join("worldgen/biomes.json"),
+        r#"{"minecraft:plains":{},"minecraft:jungle":{}}"#,
+    )
+    .unwrap();
+    let original =
+        recreate_builtin_preset_for_edit(&mut f, crate::save::WorldPreset::SingleBiomeSurface);
+    assert!(matches!(f.title.mode, Mode::CreateBuffet { .. }));
+    f.title.click(240.0, 50.0, (480.0, 262.0));
+    let settings = save_recreated_builtin_preset(&mut f, &original);
+    let generator = settings.get("generator").unwrap();
+    assert_eq!(
+        crate::save::text(
+            generator
+                .get("biome_source")
+                .and_then(|source| source.get("biome"))
+        ),
+        Some("minecraft:jungle".into())
+    );
+    assert_eq!(
+        crate::save::text(generator.get("settings")),
+        Some("example:overworld".into())
+    );
+}
+
 #[test]
 fn world_preset_narration_matches_the_cycle_and_only_hints_actual_amplified() {
     let mut options = WorldOptions {
