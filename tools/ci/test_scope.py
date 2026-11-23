@@ -105,8 +105,11 @@ READERS = {
     ],
 }
 # What a package's tests only read at run time and nothing else uses: the package is selected, its dependents are not.
-# horizon-client-core's lang.rs tests read the sources of every crate for the language keys the code names.
-SCANNED = {"horizon-client-core": ["crates"]}
+# The game language key tests scan every crate for key references.
+SCANNED = {
+    "horizon-client-core": ["crates"],
+    "horizon-client-render": ["crates"],
+}
 # Literals the scan takes for a walk up to crates/ that are not one (a ".." among path-traversal checks).
 # "machines/.." in a test's sample paths, "mods/" in an instance's file names: no read either.
 NOT_READS = {
